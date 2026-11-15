@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot</title>
+<title>Deep Loot v1.25.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -74,11 +74,18 @@ canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
 .board .card{min-height:52px}.board .pad{height:12px;flex:none}
 .tile svg{width:38px;height:38px}.tile small{font:700 12px system-ui;color:#e8dcb8;line-height:1.2;min-height:2.4em;display:flex;align-items:center}
 .card.here{opacity:.8}
+button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offset:2px}
+.ver{text-align:center;font:600 11px system-ui;color:#7d939a;padding:2px 0 4px}
+.hint{text-align:center;font:500 11px/1.5 system-ui;color:#9fb8c8;opacity:.85;padding:0 8px 10px}
 </style></head><body>
 <canvas id="c"></canvas><div id="safe"></div><div id="dash">РЫВОК</div>
 <button id="snd" aria-label="sound"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#dfe9ea"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="#dfe9ea" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16 9l5 6M21 9l-5 6" stroke="#ff9a8a" stroke-width="2.2" stroke-linecap="round"/></svg></button><div id="boatbar"><button id="bGo"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 15h18l-3 5H6z" fill="#3a2410"/><path d="M12 3v12M12 4l7 8h-7M12 6l-6 7h6" fill="#fff4d8" stroke="#3a2410" stroke-width="1.2"/></svg><span id="bGoT">В путь</span></button><button id="bUp"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 8h-4v9H9v-9H5z" fill="#3a2410"/></svg><span id="bUpT">Улучшения</span></button></div><div id="ui"></div>
 <script>
 'use strict';
+// Release version: bump this constant, <title> and any visible version label together.
+const VERSION='1.25.0';
+// Changelog
+// 1.25.0: i18n 完整性校對（11 語言 key 對齊）；存檔版本欄位與損毀備份；選單鍵盤導航與操作提示；html lang 初始同步
 // ======================================================================
 // Языки (рекомендованные Poki): все тексты игры здесь. {n},{q},{name} — подстановки; '|' — варианты по уровню
 // ======================================================================
@@ -448,8 +455,21 @@ Object.assign(I18N.zh,{lagoon_lock:'击败鮟鱇',finale:'四个地点全部通�
 Object.assign(I18N.ja,{lagoon_lock:'チョウチンアンコウを倒せ',finale:'4つの場所をすべてクリア！サンゴのラグーンでのんびりしよう——いつでもお宝がある'});
 Object.assign(I18N.ko,{lagoon_lock:'아귀를 쓰러뜨려라',finale:'네 장소를 모두 클리어! 산호 라군에서 쉬어 가 — 언제나 보물이 있다'});
 Object.assign(I18N.pt,{lagoon_lock:'Derrote o peixe-pescador',finale:'Você venceu os quatro lugares! Relaxe na Lagoa de coral — sempre há tesouro lá'});
+Object.assign(I18N.ru,{controlsHint:'WASD / стрелки — плыть · Пробел / Shift — рывок · M — звук · +/− — масштаб'});
+Object.assign(I18N.en,{controlsHint:'WASD / arrows — swim · Space / Shift — dash · M — sound · +/− — zoom'});
+Object.assign(I18N.fr,{controlsHint:'WASD / flèches — nager · Espace / Shift — élan · M — son · +/− — zoom'});
+Object.assign(I18N.it,{controlsHint:'WASD / frecce — nuotare · Spazio / Shift — scatto · M — audio · +/− — zoom'});
+Object.assign(I18N.de,{controlsHint:'WASD / Pfeile — schwimmen · Leertaste / Shift — Dash · M — Ton · +/− — Zoom'});
+Object.assign(I18N.es,{controlsHint:'WASD / flechas — nadar · Espacio / Shift — impulso · M — sonido · +/− — zoom'});
+Object.assign(I18N.tr,{controlsHint:'WASD / ok tuşları — yüz · Boşluk / Shift — hamle · M — ses · +/− — zoom'});
+Object.assign(I18N.zh,{controlsHint:'WASD / 方向键 — 游动 · 空格 / Shift — 冲刺 · M — 静音 · +/− — 缩放'});
+Object.assign(I18N.ja,{controlsHint:'WASD / 矢印キー — 泳ぐ · スペース / Shift — ダッシュ · M — サウンド · +/− — ズーム'});
+Object.assign(I18N.ko,{controlsHint:'WASD / 방향키 — 이동 · 스페이스 / Shift — 대시 · M — 사운드 · +/− — 확대'});
+Object.assign(I18N.pt,{controlsHint:'WASD / setas — nadar · Espaço / Shift — impulso · M — som · +/− — zoom'});
 const LANGS=['en','fr','it','de','es','tr','zh','ja','ko','pt','ru'];
 let LANG='en';
+// 初始語言：瀏覽器 locale（存檔選擇稍後在 META 載入後覆蓋），先同步 <html lang>
+{const nav=(navigator.language||'en').slice(0,2).toLowerCase();if(LANGS.includes(nav))LANG=nav;document.documentElement.lang=LANG}
 function tr(k,v){let s=(I18N[LANG]&&I18N[LANG][k])??I18N.en[k]??k;if(v)for(const p in v)s=s.split('{'+p+'}').join(v[p]);return s}
 
 // Poki SDK: события копятся, пока SDK не готов
@@ -2056,10 +2076,26 @@ function frame(now){
 // ======================================================================
 // 15. Прогресс между погружениями: казна, улучшения, карта, локации
 // ======================================================================
-const SAVE_KEY='goldHunters1',LEVELS_IDS=['galleon','temple','abyss','deep','lagoon'];
+const SAVE_KEY='goldHunters1',SAVE_VER=1,BAD_KEY='goldHunters1_bad',LEVELS_IDS=['galleon','temple','abyss','deep','lagoon'];
 const META={lang:'',mute:false,cur:'galleon',gold:0,up:{air:0,lamp:0,bar:0,fins:0,helm:0},relic:{},maps:{temple:false,abyss:false,deep:false,lagoon:false},best:{galleon:0,temple:0,abyss:0,deep:0,lagoon:0}};
-try{const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(s){Object.assign(META.up,s.up||{});Object.assign(META.maps,s.maps||{});Object.assign(META.best,s.best||{});META.gold=s.gold|0;META.lang=s.lang||'';META.mute=!!s.mute;META.rescued=!!s.rescued;Object.assign(META.relic,s.relic||{});META.harpoon=!!s.harpoon;META.relicTold=!!s.relicTold;META.dep=s.dep!==undefined?!!s.dep:(s.gold|0)>0;if((META.best.abyss||0)>=1950)META.maps.deep=true;if(META.maps.lagoon)META.maps.deep=true;META.bossDead=!!s.bossDead;if(s.cur&&LEVELS_IDS.includes(s.cur))META.cur=s.cur}}catch(e){}
-function saveMeta(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(META))}catch(e){}}
+const isObj=s=>s&&typeof s==='object'&&!Array.isArray(s);
+try{
+  const raw=localStorage.getItem(SAVE_KEY);let s=null;
+  if(raw){try{s=JSON.parse(raw)}catch(e){s=null}}
+  if(isObj(s)){
+    // 未來版本遷移點：if(s.saveVer&&s.saveVer<SAVE_VER){ /* 遷移舊欄位 */ }
+    if(isObj(s.up))Object.assign(META.up,s.up);
+    if(isObj(s.maps))Object.assign(META.maps,s.maps);
+    if(isObj(s.best))Object.assign(META.best,s.best);
+    if(isObj(s.relic))Object.assign(META.relic,s.relic);
+    META.gold=s.gold|0;META.lang=typeof s.lang==='string'?s.lang:'';META.mute=!!s.mute;META.rescued=!!s.rescued;
+    META.harpoon=!!s.harpoon;META.relicTold=!!s.relicTold;META.dep=s.dep!==undefined?!!s.dep:(s.gold|0)>0;
+    if((META.best.abyss||0)>=1950)META.maps.deep=true;if(META.maps.lagoon)META.maps.deep=true;
+    META.bossDead=!!s.bossDead;if(s.cur&&LEVELS_IDS.includes(s.cur))META.cur=s.cur;
+    META.saveVer=SAVE_VER;
+  }else if(raw){try{if(!localStorage.getItem(BAD_KEY))localStorage.setItem(BAD_KEY,raw)}catch(_){}}
+}catch(e){}
+function saveMeta(){try{META.saveVer=SAVE_VER;localStorage.setItem(SAVE_KEY,JSON.stringify(META))}catch(e){}}
 const UP=k=>META.up[k]||0;
 function deposit(v,noBoat){const q=LVD().quota,b0=bank,free=LVD().free;bank+=v;META.gold+=v;if(!noBoat){boatDep=true;META.dep=true}
   if(free&&bank>(META.best.lagoon||0)){if((META.best.lagoon||0)>0&&!EVD.nr){EVD.nr=1;FT.push({x:BOATX,y:SURF-120,t:tr('newRec'),c:'#7ff0a0',l:2.4,s:24})}META.best.lagoon=bank}
@@ -2784,7 +2820,7 @@ function drawBossBar(){if(!ANG.on||ANG.dead||!EVD.angSeen||!inArena(dv.x,dv.y))r
 
 // ---------- погружение: сброс мира и сборка выбранной локации
 function loadLevel(id){
-  LV=id;boatDep=false;if(id==='lagoon')LEVELS.lagoon.gs=rnd(0,6);{const L=id==='lagoon';TCOL[1]=L?[238,216,164]:[66,64,54];TCOL[2]=L?[206,182,134]:[48,47,42];TCOL[3]=L?[166,156,140]:[74,80,88]}EVD={};FAILS=0;DIVES=0;atSurf=true;LVT0=performance.now();ev('level',id,'start');ev('device',matchMedia('(pointer:coarse)').matches?'touch':'mouse','level-'+id);ev('upgrades-at-start',id,'total-'+Object.values(META.up).reduce((a,b)=>a+b,0));bodies.length=0;OCTOS.length=0;DECO.length=0;LOOSE.length=0;SEAC.length=0;CRABS.length=0;P.length=0;FT.length=0;NUG.length=0;
+  LV=id;boatDep=false;if(id==='lagoon')LEVELS.lagoon.gs=rnd(0,6);{const L=id==='lagoon';TCOL[1]=L?[238,216,164]:[66,64,54];TCOL[2]=L?[206,182,134]:[48,47,42];TCOL[3]=L?[166,156,140]:[74,80,88]}EVD={};FAILS=0;DIVES=0;atSurf=true;LVT0=performance.now();ev('level',id,'start');ev('device',matchMedia('(pointer:coarse)').matches?'touch':'mouse','level-'+id);ev('upgrades-at-start',id,'total-'+Object.values(META.up).reduce((a,b)=>a+b,0));bodies.length=0;OCTOS.length=0;DECO.length=0;LOOSE.length=0;SEAC.length=0;CRABS.length=0;P.length=0;FT.length=0;NUG.length=0;TAPS.length=0;
   T.fill(0);V.fill(0);Hp.fill(0);GC.fill(0);TOTAL=0;bag=0;bank=0;LOST=0;HB=0;cleanTold=false;bonusTold=false;MAPP=null;
   G.o=null;G.t=null;visited=false;entered=false;goalTold=false;roamT=4;toldRoam=false;for(const v of VENTS)v.y=0;
   GEYS.length=0;CRACKS.length=0;GLOW.length=0;DEN=null;VXT=null;toldVx=false;VX.stun=0;VX.cd=0;{const vx=LV==='abyss'?[820,5080]:[1250,4300];VENTS.forEach((v,i)=>{v.x=vx[i];v.y=0})}KT=null;krT=7;toldKr=false;toldGey=false;TOLDG={};KEYE=null;CROWN=null;KR.maw=KR.mawT=KR.stun=0;
@@ -2861,7 +2897,7 @@ function showBoard(){const fresh=state!=='menu';if(fresh){state='menu';pk('gamep
   openUI(`<div class="panel board"><button class="x" data-back aria-label="${tr('close')}">✕</button><div class="top"><h2>${tr('board')}</h2><div class="stats"><span title="${tr('tipBank')}">${ICON.coin}${bank}</span><span title="${tr('tipGold')}">${ICON.chest}${META.gold}</span></div>
     <select id="langSel" aria-label="${tr('lang')}">${LANGS.map(l=>`<option value="${l}"${l===LANG?' selected':''}>${I18N[l]._}</option>`).join('')}</select></div>
     <div class="cols"><section><h3>${ICON.map}${tr('where')}</h3>${chartSVG()}${card('galleon',ICON.ship)}${card('temple',ICON.temple)}${card('abyss',ICON.abyss)}${card('deep',ICON.deep)}${card('lagoon',ICON.lagoon)}${META.maps.lagoon?`<div class="soonline">${ICON.lock}<b>${tr('soon')}</b> · ${tr('soonInfo')}</div>`:''}</section>
-    <section><h3>${ICON.up}${tr('ups')}</h3><div class="ugrid">${UPGRADES.map(row).join('')}</div><h3 style="margin-top:12px">${tr('relic')} <span style="opacity:.75">${relicN()}/${RELIC_IDS.length}</span></h3>${relicSVG()}<small style="display:block;opacity:.75;margin-top:4px">${META.harpoon?tr('harpOn'):tr('relicInfo')}</small></section></div><div class="pad"></div></div>`)}
+    <section><h3>${ICON.up}${tr('ups')}</h3><div class="ugrid">${UPGRADES.map(row).join('')}</div><h3 style="margin-top:12px">${tr('relic')} <span style="opacity:.75">${relicN()}/${RELIC_IDS.length}</span></h3>${relicSVG()}<small style="display:block;opacity:.75;margin-top:4px">${META.harpoon?tr('harpOn'):tr('relicInfo')}</small></section></div><div class="hint">${tr('controlsHint')}</div><div class="ver">v${VERSION}</div><div class="pad"></div></div>`)}
 // улучшения — картинками
 const UPI={
   air:'<svg viewBox="0 0 40 40"><rect x="13" y="10" width="14" height="25" rx="7" fill="#c9d8dc" stroke="#2a3a40" stroke-width="2"/><rect x="16.5" y="4" width="7" height="7" rx="1" fill="#8a9aa0" stroke="#2a3a40" stroke-width="1.6"/><path d="M13 20h14" stroke="#2a3a40" stroke-width="1.4"/><circle cx="32" cy="13" r="3" fill="none" stroke="#9fe0ea" stroke-width="1.6"/><circle cx="35" cy="22" r="2" fill="none" stroke="#9fe0ea" stroke-width="1.4"/><circle cx="31" cy="29" r="1.5" fill="none" stroke="#9fe0ea" stroke-width="1.2"/></svg>',
@@ -2875,6 +2911,10 @@ ui.addEventListener('click',e=>{
   if(t.dataset.go){const go=t.dataset.go;endDive();META.cur=go;saveMeta();hideUI();ev('travel',go,'sail');adBreak(()=>{loadLevel(go);state='play';pk('gameplayStart');msg(LVD().start,4);sfx.splash()})}
   else if(t.dataset.buy){const u=UPGRADES.find(q=>q.k===t.dataset.buy),l=UP(u.k),c=u.cost[l];if(c&&META.gold>=c){META.gold-=c;META.up[u.k]=l+1;saveMeta();sfx.chime();ev('shop-item',u.k,'interact');ev('upgrade',u.k,'level-'+(l+1));if(!META.up._first){META.up._first=1;ev('milestone','first-upgrade','reached')}showBoard()}}
   else if(t.dataset.back!==undefined){endDive();hideUI();state='play';ev('button','continue','interact');pk('gameplayStart')}});
+ui.addEventListener('keydown',e=>{
+  if(state!=='menu')return;
+  if(e.key==='Escape'){e.preventDefault();endDive();hideUI();state='play';ev('button','continue','interact');pk('gameplayStart')}
+});
 // цель выполнена → у лодки кнопка «В путь»; можно и дальше собирать
 let atBoat=false,atShop=false;
 // между погружениями: хватает золота хоть на одно улучшение → на лодке кнопка «Улучшения»
