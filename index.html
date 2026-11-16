@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.25.0</title>
+<title>Deep Loot v1.26.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -53,6 +53,10 @@ canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
 .max{font:700 12px system-ui;color:#ffd76a;padding:0 8px}
 #snd{position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));width:44px;height:44px;border-radius:50%;border:2px solid rgba(190,220,230,.35);background:rgba(16,34,46,.6);display:flex;align-items:center;justify-content:center;z-index:6;cursor:pointer;padding:0;touch-action:manipulation}
 #snd .off{display:none}#snd.muted .off{display:inline}#snd.muted .on{display:none}
+#aiFloat{position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(66px + env(safe-area-inset-bottom));min-height:36px;padding:6px 12px;border-radius:18px;border:2px solid rgba(190,220,230,.35);background:rgba(16,34,46,.6);color:#cfe3ea;font:700 12px system-ui;z-index:6;cursor:pointer;display:flex;align-items:center;gap:6px;touch-action:manipulation}
+#aiFloat.on{background:rgba(40,90,60,.75);border-color:#7ff0a0;color:#dfffe8}
+.board .aiBtn{border:1px solid rgba(201,168,96,.5);background:rgba(255,255,255,.08);color:#f0e2b8;font:700 13px system-ui;border-radius:10px;padding:6px 12px;cursor:pointer}
+.board .aiBtn.on{background:rgba(40,90,60,.75);border-color:#7ff0a0;color:#dfffe8}
 .card.pick{cursor:pointer}.card.sel{border-color:#ffd76a;box-shadow:0 0 0 1px #ffd76a inset;background:rgba(255,215,106,.09)}
 .radio{width:18px;height:18px;border-radius:50%;border:2px solid #c9a860;flex:none;box-sizing:border-box}.card.sel .radio{background:radial-gradient(#ffd76a 40%,transparent 46%)}
 .tag{font:700 10px system-ui;background:#b02a1a;color:#fff4d8;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:2px;text-transform:uppercase;white-space:nowrap}
@@ -79,12 +83,13 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 .hint{text-align:center;font:500 11px/1.5 system-ui;color:#9fb8c8;opacity:.85;padding:0 8px 10px}
 </style></head><body>
 <canvas id="c"></canvas><div id="safe"></div><div id="dash">РЫВОК</div>
-<button id="snd" aria-label="sound"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#dfe9ea"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="#dfe9ea" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16 9l5 6M21 9l-5 6" stroke="#ff9a8a" stroke-width="2.2" stroke-linecap="round"/></svg></button><div id="boatbar"><button id="bGo"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 15h18l-3 5H6z" fill="#3a2410"/><path d="M12 3v12M12 4l7 8h-7M12 6l-6 7h6" fill="#fff4d8" stroke="#3a2410" stroke-width="1.2"/></svg><span id="bGoT">В путь</span></button><button id="bUp"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 8h-4v9H9v-9H5z" fill="#3a2410"/></svg><span id="bUpT">Улучшения</span></button></div><div id="ui"></div>
+<button id="snd" aria-label="sound"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 9h4l5-4v14l-5-4H4z" fill="#dfe9ea"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="#dfe9ea" stroke-width="2" stroke-linecap="round"/><path class="off" d="M16 9l5 6M21 9l-5 6" stroke="#ff9a8a" stroke-width="2.2" stroke-linecap="round"/></svg></button><button id="aiFloat" aria-label="auto"></button><div id="boatbar"><button id="bGo"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 15h18l-3 5H6z" fill="#3a2410"/><path d="M12 3v12M12 4l7 8h-7M12 6l-6 7h6" fill="#fff4d8" stroke="#3a2410" stroke-width="1.2"/></svg><span id="bGoT">В путь</span></button><button id="bUp"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3l7 8h-4v9H9v-9H5z" fill="#3a2410"/></svg><span id="bUpT">Улучшения</span></button></div><div id="ui"></div>
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.25.0';
+const VERSION='1.26.0';
 // Changelog
+// 1.26.0: 全自動遊玩模式（AI 自動潛水、撈金、規避威脅、返程交貨、買升級、選關推進，可掛機，B 鍵切換）；新增繁體中文語系（zht）
 // 1.25.0: i18n 完整性校對（11 語言 key 對齊）；存檔版本欄位與損毀備份；選單鍵盤導航與操作提示；html lang 初始同步
 // ======================================================================
 // Языки (рекомендованные Poki): все тексты игры здесь. {n},{q},{name} — подстановки; '|' — варианты по уровню
@@ -466,7 +471,199 @@ Object.assign(I18N.zh,{controlsHint:'WASD / 方向键 — 游动 · 空格 / Shi
 Object.assign(I18N.ja,{controlsHint:'WASD / 矢印キー — 泳ぐ · スペース / Shift — ダッシュ · M — サウンド · +/− — ズーム'});
 Object.assign(I18N.ko,{controlsHint:'WASD / 방향키 — 이동 · 스페이스 / Shift — 대시 · M — 사운드 · +/− — 확대'});
 Object.assign(I18N.pt,{controlsHint:'WASD / setas — nadar · Espaço / Shift — impulso · M — som · +/− — zoom'});
-const LANGS=['en','fr','it','de','es','tr','zh','ja','ko','pt','ru'];
+I18N.zht=I18N.zht||{};
+Object.assign(I18N.zht,{
+ "_": "繁體中文",
+ "go": "啟航",
+ "roam": "黑暗中游出一隻怪物！別進入它的圈子",
+ "grabbed": "被抓住了！",
+ "stunned": "暈了！",
+ "escaped": "掙脫了！",
+ "idolHeavy": "金神像撬不開——把它拖到船上！",
+ "chestHeavy": "鐵箍寶箱撬不開——把它拖到船上！",
+ "dropped": "貨物已放下",
+ "idolBoat": "神像上船！+{n}",
+ "chestBoat": "寶箱上船！+{n}",
+ "iron": "斧頭砍不動鐵",
+ "octoDead": "章魚被打敗了",
+ "bagBoat": "+{n} 已上船",
+ "pocket": "氣穴——快呼吸！",
+ "eatenLost": "你被章魚吞了！丟失 {n} 金幣",
+ "eaten": "你被章魚吞了！",
+ "airLost": "氧氣耗盡！丟失 {n} 金幣",
+ "airOut": "氧氣耗盡！你被拉回了船上",
+ "meters": "{n} 米",
+ "tapFast": "快點屏幕！",
+ "spaceFast": "快按空格！",
+ "breakFree": "掙脫",
+ "pulled": "它正把你拖進嘴裏！",
+ "carryKey": "拖到船上  ·  空格——放下",
+ "carryTouch": "拖到船上  ·  “放下”按鈕",
+ "aBoat": "船",
+ "aGo": "啟航",
+ "aMap": "地圖",
+ "aUp": "上浮",
+ "dash": "衝刺",
+ "drop": "放下",
+ "u_air": "氣瓶",
+ "l_air": "氧氣",
+ "sec": "{n} 秒",
+ "u_lamp": "頭燈",
+ "l_lamp": "光束",
+ "lamp_v": "短|更長|很遠|探照燈",
+ "u_bar": "斧頭",
+ "l_bar": "攻擊",
+ "u_fins": "腳蹼",
+ "l_fins": "速度",
+ "u_helm": "頭盔",
+ "l_helm": "更易掙脫",
+ "helm_v": "普通|較易|更易|非常容易",
+ "galleon_name": "海盜大帆船",
+ "galleon_short": "帆船",
+ "galleon_door": "破洞",
+ "galleon_info": "深度約60米 · 巨型章魚守着貨艙",
+ "galleon_start": "目標：貨艙裏的地圖碎片，並把 {q} 金幣運上船",
+ "galleon_visit": "船尾左側有個破洞——游進去",
+ "galleon_enter": "地圖碎片在貨艙裏，有怪物看守。跟着箭頭走",
+ "galleon_done": "帆船被洗劫一空！寶藏已在船上",
+ "temple_name": "沉沒神殿",
+ "temple_short": "神殿",
+ "temple_door": "入口",
+ "temple_info": "更深更暗 · 金神像，古老陶罐",
+ "temple_start": "目標：下層大廳裏的深淵地圖和 {q} 金幣運上船。神殿在右邊的海底 →",
+ "temple_visit": "神殿入口在左下方。聖殿屋頂還有一個",
+ "temple_enter": "砸碎陶罐，從神像上鑿下金子。深淵地圖在最裏面的下層大廳……這裏住着什麼東西",
+ "temple_done": "神殿被洗劫一空！寶藏已在船上",
+ "mapGot": "地圖碎片！",
+ "mapDone": "地圖碎片！目標完成——游回船上",
+ "mapQuota": "地圖碎片！再收集 {n} 金幣。它們在發光！",
+ "goal": "目標完成！在船邊點“上甲板”——或繼續收集",
+ "max": "滿級",
+ "findMap": "找到地圖碎片",
+ "board": "船上",
+ "tipBank": "本次潛水所得",
+ "tipGold": "金庫",
+ "where": "去哪裏？",
+ "ups": "升級",
+ "abyss": "克拉肯深淵",
+ "abyssInfo": "即將開放 · 據說那裏沉睡着巨大的東西……",
+ "cont": "繼續：{name}",
+ "sail": "前往：{name}",
+ "hereTag": "你在這裏",
+ "cGal": "帆船",
+ "cTem": "神殿",
+ "cAby": "深淵",
+ "youHere": "你在這裏",
+ "sound": "聲音",
+ "lang": "語言",
+ "abyss_name": "克拉肯深淵",
+ "abyss_short": "巢穴",
+ "abyss_door": "入口",
+ "abyss_info": "洞穴迷宮 · 間歇泉 · 底部有深淵漩渦",
+ "abyss_start": "目標：{q} 金幣運上船。克拉肯的巢穴在裂谷底部 →",
+ "abyss_visit": "巢穴入口在左邊、右邊和巖頂。裏面是迷宮——小心裂縫！",
+ "abyss_enter": "克拉肯的王冠在最深處，就在深淵漩渦旁。別靠太近！",
+ "abyss_done": "深淵被洗劫一空！你搶了克拉肯本尊",
+ "krakenWarn": "裂縫在發光——是克拉肯！快躲開！",
+ "geyser": "間歇泉！滾燙的水柱會沖掉貨物——繞過去",
+ "crownHeavy": "克拉肯的王冠太重了——把它拖上船！",
+ "crownBoat": "克拉肯的王冠上船了！+{n}",
+ "finale": "四個地點全部通關！去珊瑚瀉湖放鬆吧——那裏總有寶藏",
+ "soon": "新的深海",
+ "soonInfo": "敬請期待…",
+ "aCrown": "王冠",
+ "vortexWarn": "深淵漩渦在吸你！快遊開",
+ "suck": "你被深淵吸進去了！",
+ "suckLost": "你被深淵吸進去了！丟失 {n} 金幣",
+ "deep_name": "鮟鱇海溝",
+ "deep_short": "海溝",
+ "deep_door": "入口",
+ "deep_info": "幾乎全黑 · 水母與水雷 · 底部有鮟鱇首領",
+ "deep_start": "目標：{q} 金幣並擊敗鮟鱇。海溝在下方，岩石正中 ↓",
+ "deep_visit": "入口：岩石頂部中央和兩側。這裏最黑——靠近光源",
+ "deep_enter": "鮟鱇的巢穴在最底部。別遊向那團金光！",
+ "deep_done": "海溝已征服！鮟鱇被擊敗",
+ "cDeep": "海溝",
+ "deep_lock": "通關深淵",
+ "deepOpen": "深淵通關！鮟鱇海溝已開啟——最深、最危險的地方",
+ "angTip": "那團金光是鮟鱇的誘餌！靠近就會被抓住。把它引到水雷上",
+ "angHeld": "鮟鱇抓住了你！快點屏幕——氧氣在流失！",
+ "angStun": "鮟鱇被打暈了——用斧頭砍它！",
+ "angDead": "鮟鱇被擊敗！它的寶藏歸你了",
+ "angName": "鮟鱇",
+ "angAir": "氧氣消耗快 4 倍！",
+ "lagoon_lock": "擊敗鮟鱇",
+ "relic": "黃金魚叉圖紙",
+ "relicGot": "圖紙碎片 {n}/{t}",
+ "relicTip": "圖紙碎片！集齊就能爲小船換上黃金魚叉",
+ "harpDone": "圖紙集齊！黃金魚叉已裝上你的船！",
+ "relicInfo": "碎片藏在每個地點：沙裏、暗格、怪物身旁",
+ "harpOn": "黃金魚叉裝點着你的船！",
+ "mineHit": "水雷炸中了怪物！",
+ "mineTip": "水雷傷不到你——把怪物引過去！",
+ "pufTip": "河豚！它鼓起來時要躲開——會撞掉你的金幣",
+ "jelTip": "水母會放電——電擊讓你變慢。快遊開！",
+ "airBag": "氧氣不足！快回船上，否則會丟失 {n} 金幣",
+ "hitTip": "用斧頭打！",
+ "hitMsg": "章魚被打暈了——趁它醒來前用斧頭打它！",
+ "shopTip": "金幣可以花了！在船邊點“上甲板”去升級",
+ "gMap": "地圖",
+ "inBag": "袋中 +{n}",
+ "left": "剩餘 {n}",
+ "bonus": "獎勵 +{n}",
+ "cleared": "洗劫一空！",
+ "goalsFirst": "先完成兩個目標",
+ "quotaOk": "金幣目標完成！現在去找地圖",
+ "bonusUp": "多餘金幣可用於升級",
+ "sailBtn": "出發",
+ "close": "關閉",
+ "inChest": "+{n} 寶箱",
+ "inIdol": "+{n} 神像",
+ "inCrown": "+{n} 王冠",
+ "b_air": "更多空氣",
+ "b_lamp": "更亮",
+ "b_bar": "更強打擊",
+ "b_fins": "遊得更快",
+ "b_helm": "更易掙脫",
+ "deck": "上甲板",
+ "gS": "氣泡間歇泉！在氣泡裏可以換氣",
+ "gM": "電梯間歇泉！遊進水柱——連同貨物一起往上送",
+ "gB": "大間歇泉！水柱會打掉貨物並擊暈章魚。它還會噴出金幣",
+ "aGold": "金幣",
+ "aDrop": "交付",
+ "goldEnough": "金幣夠了！運上船吧",
+ "crownGold": "王冠已上船！再收集 {n} 金幣。它們在發光！",
+ "rescued": "你被救上來了！保住金幣：+{n}。注意空氣：下次會損失一部分",
+ "lagoon_name": "珊瑚瀉湖",
+ "lagoon_short": "瀉湖",
+ "lagoon_door": "洞穴",
+ "lagoon_info": "明亮安全 · 砸碎並收集",
+ "lagoon_start": "瀉湖！這裏沒有怪物。砸碎一切，收集金幣",
+ "lagoon_visit": "珊瑚和寶箱都能用斧頭砸開",
+ "lagoon_enter": "安靜的洞穴。這裏也有戰利品",
+ "lagoon_done": "瀉湖被搜刮一空",
+ "cLag": "瀉湖",
+ "rec": "紀錄 {n}",
+ "crackTip": "有裂縫！用斧頭砸：後面有藏寶處",
+ "secret": "藏寶處！",
+ "thiefTip": "螃蟹偷走了金幣！追上去砸它",
+ "powderTip": "火藥！快遊開",
+ "newRec": "新紀錄！",
+ "controlsHint": "WASD / 方向鍵 — 遊動 · 空格 / Shift — 衝刺 · M — 靜音 · +/− — 縮放"
+});
+Object.assign(I18N.en,{autoMode:'Auto-play',autoOn:'ON',autoOff:'OFF'});
+Object.assign(I18N.ru,{autoMode:'Автоигра',autoOn:'ВКЛ',autoOff:'ВЫКЛ'});
+Object.assign(I18N.fr,{autoMode:'Jeu auto',autoOn:'ON',autoOff:'OFF'});
+Object.assign(I18N.it,{autoMode:'Gioco auto',autoOn:'ON',autoOff:'OFF'});
+Object.assign(I18N.de,{autoMode:'Autopilot',autoOn:'AN',autoOff:'AUS'});
+Object.assign(I18N.es,{autoMode:'Juego auto',autoOn:'ON',autoOff:'OFF'});
+Object.assign(I18N.tr,{autoMode:'Oto oyun',autoOn:'AÇIK',autoOff:'KAPALI'});
+Object.assign(I18N.zh,{autoMode:'自动游玩',autoOn:'开',autoOff:'关'});
+Object.assign(I18N.zht,{autoMode:'自動遊玩',autoOn:'開',autoOff:'關'});
+Object.assign(I18N.ja,{autoMode:'自動プレイ',autoOn:'オン',autoOff:'オフ'});
+Object.assign(I18N.ko,{autoMode:'자동 플레이',autoOn:'켜짐',autoOff:'꺼짐'});
+Object.assign(I18N.pt,{autoMode:'Jogo auto',autoOn:'ON',autoOff:'OFF'});
+const LANGS=['en','fr','it','de','es','tr','zh','zht','ja','ko','pt','ru'];
 let LANG='en';
 // 初始語言：瀏覽器 locale（存檔選擇稍後在 META 載入後覆蓋），先同步 <html lang>
 {const nav=(navigator.language||'en').slice(0,2).toLowerCase();if(LANGS.includes(nav))LANG=nav;document.documentElement.lang=LANG}
@@ -1123,6 +1320,100 @@ const dv={trail:[],swA:0,swR:0,trailA:0,x:BOATX+50,y:SURF+8,vx:0,vy:0,ang:0,flip
 let HUDB=0,HUDL=1e9,bag=0,bank=0,TOTAL=0,LOST=0,HB=0,cleanTold=false,bonusTold=false,pickN=0,pickT=0,noProgN=0,lastHint=-9,lastBreath=0,lastBeep=0,faintT=0,visited=false,entered=false,isTouch=false;
 const ptr={sx:600,sy:300,wx:600,wy:300,down:false};
 const keys={l:false,r:false,u:false,d:false,dash:false};
+// ================= 全自動 AI（啟發式目標導航 + 風險規避） =================
+const AI={on:false,stuckT:0,lastX:0,lastY:0,target:null,dashPulse:0,menuT:0,blockT:0};
+function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.lastX=dv.x;AI.lastY=dv.y}
+function aiNearSolid(x,y){return solidAt(x,y)||wreckSolid(x,y)}
+function aiThreatPush(){
+  let px=0,py=0;
+  const add=(x,y,r,str)=>{const d=Math.hypot(x-dv.x,y-dv.y)||1;if(d<r){const w=(1-d/r)*str;px+=(dv.x-x)/d*w;py+=(dv.y-y)/d*w}};
+  for(const o of OCTOS){if(!o.alive||o.stun>0||o.passive||o.calm)continue;add(o.x,o.y,o.sleep?o.zone*.6:o.zone*1.15,1.6)}
+  for(const c of CRABS)add(c.x,groundY(c.x),70,.5);
+  for(const m of MINES)if(m.live)add(m.x,m.y,34,.9);
+  for(const f of PUFFS)add(f.x,f.y,100,.7);
+  for(const j of HZJ)add(j.x,j.y,150,.8);
+  for(const z of ZAPS)add(z.x,z.y,44,1.1);
+  for(const g of GEYS)if(g.st!=='idle')add(g.x,g.y,g.sz==='b'?90:60,.8);
+  if(VXT&&VX.stun<=0)add(VX.x,VX.y,VXR,1.4);
+  if(KT){const pts=KT.p;for(let i=3;i<pts.length;i+=2)add(pts[i].x,pts[i].y,40,.9)}
+  if(ANG.on&&!ANG.dead){const[lx,ly]=angLure();add(lx,ly,64,.9);const[mx,my]=angMouth();if(ANG.st==='tell'||ANG.st==='lunge')add(mx,my,120,1.3)}
+  return[px,py];
+}
+function aiLootValue(b){
+  if(b.kind==='heavy')return (b.value||0)+120;
+  if(b.kind==='loot')return (b.stash||0)+(b.gems||0)*12+(b.value||0);
+  return 0;
+}
+function aiPickTarget(){
+  let best=null,bs=-1;
+  const consider=(x,y,val)=>{const d=Math.hypot(x-dv.x,y-dv.y)||1;const vis=clearLine(dv.x,dv.y,x,y)?1:.4;const s=val/(d/120+1)*vis;if(s>bs){bs=s;best={x,y,val}}}
+  if(MAPP)consider(MAPP.x,MAPP.y,400);
+  for(const b of bodies){if(b.dead||b.cells<=0)continue;if(b.kind==='octo'||b.kind==='chunk'||b.kind==='boss')continue;const v=aiLootValue(b);if(v<=0)continue;consider(b.x,b.y,v)}
+  for(const c of LOOSE)consider(c.x,c.y,14);
+  for(const c of SEAC)consider(c.x,c.y,8);
+  return best;
+}
+// 直線被殼體/實體擋住時，先繞到最近入口（外部）或出口導航點（內部）
+function aiWaypoint(x,y){
+  if(clearLine(dv.x,dv.y,x,y))return[x,y];
+  if(insideWreck(dv.x,dv.y)){
+    const dx=x-dv.x,dy=y-dv.y;
+    if(Math.abs(dx)>Math.abs(dy))return[x,dv.y];
+    return[dv.x,y]
+  }
+  const d=nearDoor();return[d[0],d[1]]
+}
+function aiReturnTarget(){
+  if(insideWreck(dv.x,dv.y)){const p=navPoint();if(p)return{x:p[0],y:p[1]}}
+  return{x:BOATX,y:SURF+14}
+}
+function aiSteerTo(x,y){
+  const[wx,wy]=aiWaypoint(x,y);
+  let dx=wx-dv.x,dy=wy-dv.y;const d=Math.hypot(dx,dy)||1;
+  const fx=dv.x+dx/d*22,fy=dv.y+dy/d*22;
+  if(aiNearSolid(fx,fy)){const side=Math.random()<.5?1:-1;const sx2=-dy/d*side,sy2=dx/d*side;dx+=sx2*1.2;dy+=sy2*1.2}
+  let ax=dx/d,ay=dy/d;
+  const[tx,ty]=aiThreatPush();ax+=tx*1.4;ay+=ty*1.4;
+  const al=Math.hypot(ax,ay)||1;ax/=al;ay/=al;
+  keys.l=ax<-.25;keys.r=ax>.25;keys.u=ay<-.25;keys.d=ay>.25;
+  const threat=Math.hypot(tx,ty);
+  keys.dash=(d>120&&dv.st>.5&&threat<.4);
+}
+function aiThink(){
+  if(G.o||ANG.hold||ANG.rl){
+    keys.l=keys.r=keys.u=keys.d=false;
+    AI.dashPulse-=1/30;if(AI.dashPulse<=0){keys.dash=true;AI.dashPulse=.22}else keys.dash=false;
+    return;
+  }
+  if(ANG.on&&!ANG.dead&&ANG.stun>0&&ANG.body){aiSteerTo(ANG.x,ANG.y);return}
+  const needReturn=dv.air<.42||(bag>0&&dv.air<.6)||goalMet()||!!dv.carry;
+  if(needReturn){const t=aiReturnTarget();aiSteerTo(t.x,t.y);AI.target=null;AI.blockT=0;return}
+  if(AI.target){const blk=!clearLine(dv.x,dv.y,AI.target.x,AI.target.y);AI.blockT=blk?AI.blockT+1/30:0;if(AI.blockT>2.5){AI.target=null;AI.blockT=0}}
+  if(!AI.target||AI.target.dead||Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)>40)AI.target=aiPickTarget();
+  if(AI.target)aiSteerTo(AI.target.x,AI.target.y);else{const t=aiReturnTarget();aiSteerTo(t.x,t.y)}
+  AI.stuckT+=1/30;
+  if(AI.stuckT>1.6){if(Math.hypot(dv.x-AI.lastX,dv.y-AI.lastY)<24){AI.target=null;keys.dash=true}AI.lastX=dv.x;AI.lastY=dv.y;AI.stuckT=0}
+  // 回到船邊且可消費/可離開 → 自動開選單交給 menuTick 處理
+  if(atSurf&&Math.abs(dv.x-BOATX)<220&&!dv.carry&&!G.o&&(canBuy()||canLeave()))showBoard();
+}
+function aiBuyUpgrades(){
+  const order=['air','fins','bar','lamp','helm'];
+  for(const k of order){const u=UPGRADES.find(q=>q.k===k),l=UP(k),c=u.cost[l];if(c&&META.gold>=c){META.gold-=c;META.up[k]=l+1;saveMeta();sfx.chime();ev('upgrade',k,'level-'+(l+1));return true}}
+  return false;
+}
+function aiNextLevel(){
+  for(const id of LEVELS_IDS){if(!isOpen(id)||id===LV)continue;if((META.best[id]||0)<LEVELS[id].quota)return id}
+  const nxt=LVD().next;if(nxt&&isOpen(nxt))return nxt;
+  return LV;
+}
+function aiMenuTick(){
+  AI.menuT-=1/30;if(AI.menuT>0)return;AI.menuT=.5;
+  if(aiBuyUpgrades()){showBoard();return}
+  const go=aiNextLevel();
+  if(go===LV&&!canLeave()){showBoard();return}
+  endDive();META.cur=go;saveMeta();hideUI();ev('travel',go,'sail');
+  adBreak(()=>{loadLevel(go);state='play';pk('gameplayStart');msg(LVD().start,4);sfx.splash()});
+}
 const biteR=()=>16,swallowN=()=>14,REACH=80;
 function sl(lx,ly){const c=Math.cos(dv.ang),n=Math.sin(dv.ang);ly*=dv.flip;return{x:dv.x+lx*c-ly*n,y:dv.y+lx*n+ly*c}}
 const front=()=>sl(24,2);
@@ -2044,7 +2335,8 @@ function build(){
 let sandAcc=0,last=performance.now();
 function update(dt){
   time+=dt;MSG.l-=dt;boatK=Math.max(0,boatK-dt*1.2);goldF=Math.max(0,goldF-dt*1.5);hudPop=Math.max(0,hudPop-dt*2.2);shakeA=Math.max(0,shakeA-dt*24);flashA=Math.max(0,flashA-dt*1.5);zoom=lerp(zoom,zoomT,Math.min(1,dt*6));
-  if(state==='play'){control(dt);physics(dt);updAir(dt)}else if(state==='faint')updFaint(dt);
+  if(state==='play'){if(AI.on)aiThink();control(dt);physics(dt);updAir(dt)}else if(state==='faint')updFaint(dt);
+  if(AI.on&&state==='menu')aiMenuTick();
   if(state==='play'&&!visited&&Math.hypot(dv.x-WRECK.x,dv.y-WRECK.y)<WRECK.rad+60){visited=true;msg(LVD().visit,4)}
   if(WRECK.doors&&!insideWreck(dv.x,dv.y))for(const[x,y]of WRECK.doors)if(Math.random()<dt*4&&Math.abs(x-dv.x)<W/zoom)bubbles(x+rnd(-14,14),y+rnd(-10,10),1,40)
   if(state==='play'&&!entered&&insideWreck(dv.x,dv.y)){entered=true;{const t=(performance.now()-LVT0)/1e3;ev('time-to-enter',LV,'sec-'+(t<30?'0-30':t<60?'30-60':t<120?'60-120':t<240?'120-240':'240+'))}msg(LVD().enter,4)}
@@ -2088,7 +2380,7 @@ try{
     if(isObj(s.maps))Object.assign(META.maps,s.maps);
     if(isObj(s.best))Object.assign(META.best,s.best);
     if(isObj(s.relic))Object.assign(META.relic,s.relic);
-    META.gold=s.gold|0;META.lang=typeof s.lang==='string'?s.lang:'';META.mute=!!s.mute;META.rescued=!!s.rescued;
+    META.gold=s.gold|0;META.lang=typeof s.lang==='string'?s.lang:'';META.mute=!!s.mute;META.rescued=!!s.rescued;META.auto=!!s.auto;
     META.harpoon=!!s.harpoon;META.relicTold=!!s.relicTold;META.dep=s.dep!==undefined?!!s.dep:(s.gold|0)>0;
     if((META.best.abyss||0)>=1950)META.maps.deep=true;if(META.maps.lagoon)META.maps.deep=true;
     META.bossDead=!!s.bossDead;if(s.cur&&LEVELS_IDS.includes(s.cur))META.cur=s.cur;
@@ -2122,10 +2414,13 @@ const LEVELS={
   lagoon:{quota:0,free:true,water:['#62e2e2','#36c2d4','#20a2c4','#1688ae'],gs:1}};
 let LV='galleon';const LVD=()=>LEVELS[LV];
 // язык: сохранённый выбор игрока → язык Poki → язык браузера → английский
+function aiBtnLabel(){return tr('autoMode')+': '+(AI.on?tr('autoOn'):tr('autoOff'))}
+function aiSyncBtn(){const f=$('aiFloat');if(f){f.textContent=aiBtnLabel();f.classList.toggle('on',AI.on)}const b=$('aiToggle');if(b){b.textContent=aiBtnLabel();b.classList.toggle('on',AI.on)}}
+function aiToggle(){AI.on=!AI.on;META.auto=AI.on;saveMeta();ev('button','auto',AI.on?'on':'off');if(!AI.on){keys.l=keys.r=keys.u=keys.d=keys.dash=false}aiSyncBtn();if(state==='menu')showBoard()}
 function applyLang(){
   for(const id in LEVELS)for(const f of['name','short','door','info','start','visit','enter','done'])LEVELS[id][f]=tr(id+'_'+f,{q:LEVELS[id].quota});
   for(const u of UPGRADES){u.name=tr('u_'+u.k);u.label=tr('l_'+u.k)}
-  document.documentElement.lang=LANG;$('bGoT').textContent=tr('deck');dashLbl='';$('snd').title=tr('sound')}
+  document.documentElement.lang=LANG;$('bGoT').textContent=tr('deck');dashLbl='';$('snd').title=tr('sound');aiSyncBtn()}
 function setLang(l,manual){if(!LANGS.includes(l))return;LANG=l;applyLang();if(manual){META.lang=l;saveMeta();ev('language',l,'selected')}if(state==='menu')showBoard()}
 
 // ---------- затопленный храм: ступенчатая пирамида, залы, шахты между ярусами
@@ -2895,7 +3190,7 @@ function showBoard(){const fresh=state!=='menu';if(fresh){state='menu';pk('gamep
     const right=here?'':can?`<button class="go" data-go="${id}">${sm}${tr('sailBtn')}</button>`:ICON.lock;
     return `<div class="card${open?'':' locked'}${can?' next':''}${can&&!META.best[id]?' fresh':''}">${icon}<div class="ct"><b>${L.name}${here?`<em class="tag">${tr('hereTag')}</em>`:''}</b><span>${!open?(id==='lagoon'?tr('lagoon_lock'):id==='deep'?tr('deep_lock'):tr('findMap')):here||can?L.info:tr('goalsFirst')}</span></div>${META.best[id]?`<span class="bestR">${ICON.coin}${META.best[id]}</span>`:''}${right}</div>`};
   openUI(`<div class="panel board"><button class="x" data-back aria-label="${tr('close')}">✕</button><div class="top"><h2>${tr('board')}</h2><div class="stats"><span title="${tr('tipBank')}">${ICON.coin}${bank}</span><span title="${tr('tipGold')}">${ICON.chest}${META.gold}</span></div>
-    <select id="langSel" aria-label="${tr('lang')}">${LANGS.map(l=>`<option value="${l}"${l===LANG?' selected':''}>${I18N[l]._}</option>`).join('')}</select></div>
+    <select id="langSel" aria-label="${tr('lang')}">${LANGS.map(l=>`<option value="${l}"${l===LANG?' selected':''}>${I18N[l]._}</option>`).join('')}</select><button id="aiToggle" class="aiBtn${AI.on?' on':''}" data-ai>${aiBtnLabel()}</button></div>
     <div class="cols"><section><h3>${ICON.map}${tr('where')}</h3>${chartSVG()}${card('galleon',ICON.ship)}${card('temple',ICON.temple)}${card('abyss',ICON.abyss)}${card('deep',ICON.deep)}${card('lagoon',ICON.lagoon)}${META.maps.lagoon?`<div class="soonline">${ICON.lock}<b>${tr('soon')}</b> · ${tr('soonInfo')}</div>`:''}</section>
     <section><h3>${ICON.up}${tr('ups')}</h3><div class="ugrid">${UPGRADES.map(row).join('')}</div><h3 style="margin-top:12px">${tr('relic')} <span style="opacity:.75">${relicN()}/${RELIC_IDS.length}</span></h3>${relicSVG()}<small style="display:block;opacity:.75;margin-top:4px">${META.harpoon?tr('harpOn'):tr('relicInfo')}</small></section></div><div class="hint">${tr('controlsHint')}</div><div class="ver">v${VERSION}</div><div class="pad"></div></div>`)}
 // улучшения — картинками
@@ -2910,6 +3205,7 @@ ui.addEventListener('click',e=>{
   const t=e.target.closest('button');if(!t)return;initAudio();
   if(t.dataset.go){const go=t.dataset.go;endDive();META.cur=go;saveMeta();hideUI();ev('travel',go,'sail');adBreak(()=>{loadLevel(go);state='play';pk('gameplayStart');msg(LVD().start,4);sfx.splash()})}
   else if(t.dataset.buy){const u=UPGRADES.find(q=>q.k===t.dataset.buy),l=UP(u.k),c=u.cost[l];if(c&&META.gold>=c){META.gold-=c;META.up[u.k]=l+1;saveMeta();sfx.chime();ev('shop-item',u.k,'interact');ev('upgrade',u.k,'level-'+(l+1));if(!META.up._first){META.up._first=1;ev('milestone','first-upgrade','reached')}showBoard()}}
+  else if(t.dataset.ai!==undefined){aiToggle()}
   else if(t.dataset.back!==undefined){endDive();hideUI();state='play';ev('button','continue','interact');pk('gameplayStart')}});
 ui.addEventListener('keydown',e=>{
   if(state!=='menu')return;
@@ -2953,7 +3249,7 @@ function updBoatBar(){
   trackDive()}
 $('bGo').addEventListener('click',()=>{initAudio();ev('button',atBoat?'set-sail':'shop-boat','interact');showBoard()});
 $('bUp').addEventListener('click',()=>{initAudio();ev('button','shop-boat','interact');showBoard()});
-loadLevel(isOpen(META.cur)?META.cur:'galleon');if(matchMedia('(pointer:coarse)').matches){isTouch=true;$('dash').style.display='flex'}
+loadLevel(isOpen(META.cur)?META.cur:'galleon');AI.on=!!META.auto;aiSyncBtn();if(matchMedia('(pointer:coarse)').matches){isTouch=true;$('dash').style.display='flex'}
 // ---------- Poki SDK (без него — заглушки), звук
 function vol(){return META.mute||PK.ad?0:.55}
 function applyVol(){if(A.m)A.m.gain.value=vol();$('snd').classList.toggle('muted',META.mute)}
@@ -2961,6 +3257,8 @@ function toggleSound(){META.mute=!META.mute;saveMeta();initAudio();applyVol();ev
 function adBreak(fn){if(!PK.sdk||!PK.sdk.commercialBreak){fn();return}PK.ad=true;applyVol();
   Promise.resolve(PK.sdk.commercialBreak(()=>{PK.ad=true;applyVol()})).catch(()=>{}).then(()=>{PK.ad=false;applyVol();fn()})}
 $('snd').addEventListener('click',e=>{e.stopPropagation();toggleSound()});$('snd').addEventListener('pointerdown',e=>e.stopPropagation());
+$('aiFloat').addEventListener('click',e=>{e.stopPropagation();initAudio();aiToggle()});
+addEventListener('keydown',e=>{if(e.code==='KeyB'&&!e.repeat)aiToggle()});
 addEventListener('keydown',e=>{if(e.code==='KeyM'&&!e.repeat)toggleSound()});
 {const nav=(navigator.language||'en').slice(0,2).toLowerCase();LANG=LANGS.includes(META.lang)?META.lang:LANGS.includes(nav)?nav:'en'}
 applyLang();applyVol();
