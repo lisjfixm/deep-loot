@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.26.0</title>
+<title>Deep Loot v1.27.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.26.0';
+const VERSION='1.27.0';
 // Changelog
+// 1.27.0: AI 導航強化——船骸網格 BFS 繞路、多段脫困狀態機與目標黑名單、可達性評分、平滑航向與更準確的威脅過濾；修正攜重物誤衝刺掉寶、返程誤入船骸門口、袋內未入庫就開選單等卡住問題
 // 1.26.0: 全自動遊玩模式（AI 自動潛水、撈金、規避威脅、返程交貨、買升級、選關推進，可掛機，B 鍵切換）；新增繁體中文語系（zht）
 // 1.25.0: i18n 完整性校對（11 語言 key 對齊）；存檔版本欄位與損毀備份；選單鍵盤導航與操作提示；html lang 初始同步
 // ======================================================================
@@ -1320,81 +1321,126 @@ const dv={trail:[],swA:0,swR:0,trailA:0,x:BOATX+50,y:SURF+8,vx:0,vy:0,ang:0,flip
 let HUDB=0,HUDL=1e9,bag=0,bank=0,TOTAL=0,LOST=0,HB=0,cleanTold=false,bonusTold=false,pickN=0,pickT=0,noProgN=0,lastHint=-9,lastBreath=0,lastBeep=0,faintT=0,visited=false,entered=false,isTouch=false;
 const ptr={sx:600,sy:300,wx:600,wy:300,down:false};
 const keys={l:false,r:false,u:false,d:false,dash:false};
-// ================= 全自動 AI（啟發式目標導航 + 風險規避） =================
-const AI={on:false,stuckT:0,lastX:0,lastY:0,target:null,dashPulse:0,menuT:0,blockT:0};
-function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.lastX=dv.x;AI.lastY=dv.y}
+// ================= 全自動 AI（啟發式：網格導航 + 風險規避 + 脫困狀態機） =================
+const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false};
+function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.lastX=dv.x;AI.lastY=dv.y}
 function aiNearSolid(x,y){return solidAt(x,y)||wreckSolid(x,y)}
 function aiThreatPush(){
   let px=0,py=0;
   const add=(x,y,r,str)=>{const d=Math.hypot(x-dv.x,y-dv.y)||1;if(d<r){const w=(1-d/r)*str;px+=(dv.x-x)/d*w;py+=(dv.y-y)/d*w}};
-  for(const o of OCTOS){if(!o.alive||o.stun>0||o.passive||o.calm)continue;add(o.x,o.y,o.sleep?o.zone*.6:o.zone*1.15,1.6)}
-  for(const c of CRABS)add(c.x,groundY(c.x),70,.5);
-  for(const m of MINES)if(m.live)add(m.x,m.y,34,.9);
-  for(const f of PUFFS)add(f.x,f.y,100,.7);
+  for(const o of OCTOS){if(!o.alive||o.stun>0||o.passive||o.calm)continue;add(o.x,o.y,o.sleep?o.zone*.6:o.zone*1.2,1.7)}
+  for(const c of CRABS)add(c.x,groundY(c.x),60,.4);
+  for(const m of MINES)if(m.live)add(m.x,m.y,36,1);
+  for(const f of PUFFS)if(f.inf>.55)add(f.x,f.y,90,.8);
   for(const j of HZJ)add(j.x,j.y,150,.8);
-  for(const z of ZAPS)add(z.x,z.y,44,1.1);
-  for(const g of GEYS)if(g.st!=='idle')add(g.x,g.y,g.sz==='b'?90:60,.8);
-  if(VXT&&VX.stun<=0)add(VX.x,VX.y,VXR,1.4);
-  if(KT){const pts=KT.p;for(let i=3;i<pts.length;i+=2)add(pts[i].x,pts[i].y,40,.9)}
-  if(ANG.on&&!ANG.dead){const[lx,ly]=angLure();add(lx,ly,64,.9);const[mx,my]=angMouth();if(ANG.st==='tell'||ANG.st==='lunge')add(mx,my,120,1.3)}
+  for(const z of ZAPS)add(z.x,z.y,46,1.2);
+  for(const g of GEYS){if(g.sz==='s'||g.st==='idle')continue;add(g.x,g.y,g.sz==='b'?95:65,.9)}
+  if(VXT&&VX.stun<=0)add(VX.x,VX.y,VXR,1.5);
+  if(KT){const pts=KT.p;for(let i=3;i<pts.length;i+=2)add(pts[i].x,pts[i].y,42,1)}
+  if(ANG.on&&!ANG.dead){const[lx,ly]=angLure();add(lx,ly,66,.9);const[mx,my]=angMouth();if(ANG.st==='tell'||ANG.st==='lunge')add(mx,my,125,1.4)}
+  const m=Math.hypot(px,py);if(m>1.6){px*=1.6/m;py*=1.6/m}
   return[px,py];
 }
 function aiLootValue(b){
-  if(b.kind==='heavy')return (b.value||0)+120;
-  if(b.kind==='loot')return (b.stash||0)+(b.gems||0)*12+(b.value||0);
+  if(b.kind==='heavy')return (b.value||0)+220+(b.what?120:0);
+  if(b.kind==='loot')return (b.stash||0)+(b.gems||0)*14+(b.value||0);
   return 0;
+}
+function aiReach(x,y){
+  if(clearLine(dv.x,dv.y,x,y))return 1;
+  if(NAV&&insideWreck(dv.x,dv.y))return .6;
+  return .35;
 }
 function aiPickTarget(){
   let best=null,bs=-1;
-  const consider=(x,y,val)=>{const d=Math.hypot(x-dv.x,y-dv.y)||1;const vis=clearLine(dv.x,dv.y,x,y)?1:.4;const s=val/(d/120+1)*vis;if(s>bs){bs=s;best={x,y,val}}}
-  if(MAPP)consider(MAPP.x,MAPP.y,400);
+  const consider=(x,y,val)=>{
+    const d=Math.hypot(x-dv.x,y-dv.y)||1;
+    const key=Math.round(x)+','+Math.round(y);
+    if(AI.black[key]&&AI.black[key]>time)return;
+    const s=val/(d/130+1)*aiReach(x,y);
+    if(s>bs){bs=s;best={x,y,val}}
+  };
+  if(MAPP)consider(MAPP.x,MAPP.y,520);
   for(const b of bodies){if(b.dead||b.cells<=0)continue;if(b.kind==='octo'||b.kind==='chunk'||b.kind==='boss')continue;const v=aiLootValue(b);if(v<=0)continue;consider(b.x,b.y,v)}
-  for(const c of LOOSE)consider(c.x,c.y,14);
+  for(const c of LOOSE)consider(c.x,c.y,15);
   for(const c of SEAC)consider(c.x,c.y,8);
   return best;
 }
-// 直線被殼體/實體擋住時，先繞到最近入口（外部）或出口導航點（內部）
+function aiCell(x,y){const[lx,ly]=toLocal(WRECK,x,y);return[Math.floor((lx+NAV.M)/NAV.S),Math.floor((ly+NAV.M)/NAV.S)]}
+function aiOpen(i,j){if(i<0||j<0||i>=NAV.nw||j>=NAV.nh)return false;return NAV.d[j*NAV.nw+i]>=0}
+function aiGridStep(tx,ty){
+  if(!NAV)return null;
+  const[si,sj]=aiCell(dv.x,dv.y);if(!aiOpen(si,sj))return null;
+  let[ti,tj]=aiCell(tx,ty);ti=Math.max(0,Math.min(NAV.nw-1,ti));tj=Math.max(0,Math.min(NAV.nh-1,tj));
+  const N=NAV.nw*NAV.nh,parent=new Int32Array(N).fill(-1),q=[sj*NAV.nw+si];parent[q[0]]=q[0];
+  const near=k=>{const i=k%NAV.nw,j=(k/NAV.nw)|0;return Math.abs(i-ti)<=2&&Math.abs(j-tj)<=2};
+  let head=0,found=-1;
+  while(head<q.length){const k=q[head++];if(near(k)){found=k;break}const i=k%NAV.nw,j=(k/NAV.nw)|0;
+    for(const[di,dj]of[[1,0],[-1,0],[0,1],[0,-1]]){const a=i+di,c=j+dj;if(!aiOpen(a,c))continue;const n=c*NAV.nw+a;if(parent[n]!==-1)continue;parent[n]=k;q.push(n)}}
+  if(found<0)return null;
+  let k=found,steps=0;while(parent[k]!==k&&steps<2){k=parent[k];steps++}
+  return NAV.W_(k%NAV.nw,(k/NAV.nw)|0);
+}
 function aiWaypoint(x,y){
   if(clearLine(dv.x,dv.y,x,y))return[x,y];
-  if(insideWreck(dv.x,dv.y)){
-    const dx=x-dv.x,dy=y-dv.y;
-    if(Math.abs(dx)>Math.abs(dy))return[x,dv.y];
-    return[dv.x,y]
-  }
-  const d=nearDoor();return[d[0],d[1]]
+  if(!insideWreck(dv.x,dv.y))return[x,y];
+  if(NAV){const g=aiGridStep(x,y);if(g)return g;const p=navPoint();if(p)return[p[0],p[1]]}
+  const d=nearDoor();return[d[0],d[1]];
 }
 function aiReturnTarget(){
+  if(dv.air<.25&&!insideWreck(dv.x,dv.y))return{x:dv.x,y:SURF+10};
   if(insideWreck(dv.x,dv.y)){const p=navPoint();if(p)return{x:p[0],y:p[1]}}
   return{x:BOATX,y:SURF+14}
 }
 function aiSteerTo(x,y){
   const[wx,wy]=aiWaypoint(x,y);
   let dx=wx-dv.x,dy=wy-dv.y;const d=Math.hypot(dx,dy)||1;
-  const fx=dv.x+dx/d*22,fy=dv.y+dy/d*22;
-  if(aiNearSolid(fx,fy)){const side=Math.random()<.5?1:-1;const sx2=-dy/d*side,sy2=dx/d*side;dx+=sx2*1.2;dy+=sy2*1.2}
   let ax=dx/d,ay=dy/d;
-  const[tx,ty]=aiThreatPush();ax+=tx*1.4;ay+=ty*1.4;
+  const[tx,ty]=aiThreatPush();ax+=tx*1.5;ay+=ty*1.5;
   const al=Math.hypot(ax,ay)||1;ax/=al;ay/=al;
-  keys.l=ax<-.25;keys.r=ax>.25;keys.u=ay<-.25;keys.d=ay>.25;
-  const threat=Math.hypot(tx,ty);
-  keys.dash=(d>120&&dv.st>.5&&threat<.4);
+  if(aiNearSolid(dv.x+ax*24,dv.y+ay*24)){const side=Math.random()<.5?1:-1;const px=-ay*side,py=ax*side;ax=ax*.3+px;ay=ay*.3+py;const a2=Math.hypot(ax,ay)||1;ax/=a2;ay/=a2}
+  const want=Math.atan2(ay,ax);
+  if(AI.heading===null)AI.heading=want;
+  let dh=want-AI.heading;dh=Math.atan2(Math.sin(dh),Math.cos(dh));
+  AI.heading+=dh*Math.min(1,12/30);
+  const hx=Math.cos(AI.heading),hy=Math.sin(AI.heading);
+  keys.l=hx<-.25;keys.r=hx>.25;keys.u=hy<-.25;keys.d=hy>.25;
+  const threat=Math.hypot(tx,ty),ahead=aiNearSolid(dv.x+ax*26,dv.y+ay*26);
+  keys.dash=(d>140&&dv.st>.5&&threat<.4&&!ahead&&!dv.carry);
 }
 function aiThink(){
   if(G.o||ANG.hold||ANG.rl){
-    keys.l=keys.r=keys.u=keys.d=false;
+    keys.l=keys.r=keys.u=keys.d=false;AI.heading=null;
     AI.dashPulse-=1/30;if(AI.dashPulse<=0){keys.dash=true;AI.dashPulse=.22}else keys.dash=false;
     return;
   }
   if(ANG.on&&!ANG.dead&&ANG.stun>0&&ANG.body){aiSteerTo(ANG.x,ANG.y);return}
-  const needReturn=dv.air<.42||(bag>0&&dv.air<.6)||goalMet()||!!dv.carry;
+  const needReturn=dv.air<.45||(bag>0&&dv.air<.62)||goalMet()||!!dv.carry;
   if(needReturn){const t=aiReturnTarget();aiSteerTo(t.x,t.y);AI.target=null;AI.blockT=0;return}
-  if(AI.target){const blk=!clearLine(dv.x,dv.y,AI.target.x,AI.target.y);AI.blockT=blk?AI.blockT+1/30:0;if(AI.blockT>2.5){AI.target=null;AI.blockT=0}}
+  if(AI.escapeT>0){
+    AI.escapeT-=1/30;
+    const hx=Math.cos(AI.escapeA),hy=Math.sin(AI.escapeA);
+    keys.l=hx<-.25;keys.r=hx>.25;keys.u=hy<-.25;keys.d=hy>.25;keys.dash=true;
+    return;
+  }
+  if(AI.target){const blk=!clearLine(dv.x,dv.y,AI.target.x,AI.target.y);AI.blockT=blk?AI.blockT+1/30:0;if(AI.blockT>2.5){AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+4;AI.target=null;AI.blockT=0}}
   if(!AI.target||AI.target.dead||Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)>40)AI.target=aiPickTarget();
   if(AI.target)aiSteerTo(AI.target.x,AI.target.y);else{const t=aiReturnTarget();aiSteerTo(t.x,t.y)}
   AI.stuckT+=1/30;
-  if(AI.stuckT>1.6){if(Math.hypot(dv.x-AI.lastX,dv.y-AI.lastY)<24){AI.target=null;keys.dash=true}AI.lastX=dv.x;AI.lastY=dv.y;AI.stuckT=0}
-  // 回到船邊且可消費/可離開 → 自動開選單交給 menuTick 處理
-  if(atSurf&&Math.abs(dv.x-BOATX)<220&&!dv.carry&&!G.o&&(canBuy()||canLeave()))showBoard();
+  if(AI.stuckT>1.3){
+    const moved=Math.hypot(dv.x-AI.lastX,dv.y-AI.lastY);
+    if(moved<26){
+      AI.escapeN++;
+      const base=AI.target?Math.atan2(AI.target.y-dv.y,AI.target.x-dv.x):(AI.heading||0);
+      AI.escapeA=base+(AI.escapeN%2?1:-1)*Math.PI/2+(Math.random()-.5)*.5;
+      AI.escapeT=.7;
+      if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+4;
+      AI.target=null;AI.heading=null;
+      if(AI.escapeN>=3){AI.escapeN=0;const t=aiReturnTarget();aiSteerTo(t.x,t.y)}
+    }else AI.escapeN=0;
+    AI.lastX=dv.x;AI.lastY=dv.y;AI.stuckT=0;
+  }
+  if(!AI.boardOpened&&atSurf&&bag===0&&!dv.carry&&!G.o&&Math.abs(dv.x-BOATX)<220&&(canBuy()||canLeave())){AI.boardOpened=true;showBoard()}
 }
 function aiBuyUpgrades(){
   const order=['air','fins','bar','lamp','helm'];
@@ -1414,6 +1460,7 @@ function aiMenuTick(){
   endDive();META.cur=go;saveMeta();hideUI();ev('travel',go,'sail');
   adBreak(()=>{loadLevel(go);state='play';pk('gameplayStart');msg(LVD().start,4);sfx.splash()});
 }
+
 const biteR=()=>16,swallowN=()=>14,REACH=80;
 function sl(lx,ly){const c=Math.cos(dv.ang),n=Math.sin(dv.ang);ly*=dv.flip;return{x:dv.x+lx*c-ly*n,y:dv.y+lx*n+ly*c}}
 const front=()=>sl(24,2);
@@ -3120,7 +3167,7 @@ function loadLevel(id){
   G.o=null;G.t=null;visited=false;entered=false;goalTold=false;roamT=4;toldRoam=false;for(const v of VENTS)v.y=0;
   GEYS.length=0;CRACKS.length=0;GLOW.length=0;DEN=null;VXT=null;toldVx=false;VX.stun=0;VX.cd=0;{const vx=LV==='abyss'?[820,5080]:[1250,4300];VENTS.forEach((v,i)=>{v.x=vx[i];v.y=0})}KT=null;krT=7;toldKr=false;toldGey=false;TOLDG={};KEYE=null;CROWN=null;KR.maw=KR.mawT=KR.stun=0;
   Object.assign(dv,{x:BOATX+50,y:SURF+8,vx:0,vy:0,ang:0,pitch:0,face:1,fx:1,air:1,st:1,inv:0,eaten:false,lost:0,gO:null,spin:0,carry:null,carryCd:0,trail:[],jawPt:null,tool:0,toldCarry:false,dashT:0});
-  ANG.on=false;ANG.box=null;build();buildNav();if(LV==='galleon')glowPath();angReset();
+  ANG.on=false;ANG.box=null;build();buildNav();if(LV==='galleon')glowPath();angReset();aiReset();
 }
 // светящиеся водоросли в галеоне: от каждого входа к обрывку карты (или к трюму)
 function glowPath(){if(!NAV)return;const{S,M,nw,nh,d,W_}=NAV,K=WK,cell=(x,y)=>{const[lx,ly]=toLocal(WRECK,x,y);return[Math.floor((lx+M)/S),Math.floor((ly+M)/S)]};
