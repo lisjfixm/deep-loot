@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.28.0</title>
+<title>Deep Loot v1.29.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.28.0';
+const VERSION='1.29.0';
 // Changelog
+// 1.29.0: 強化怪物閃避——觸手尖端/投射物速度預測納入威脅，貼近時決策式逃離並避開撞牆方向；航線兩側取開水方向；卡住偵測排除鋸木/咬住中的刻意靜止；脫困角度先探測 30px 開放方向再脫離
 // 1.28.0: AI 全資料感知——讀取全部怪物/水雷/毒泡/觸手/裂縫/鮟鱇誘餌與嘴部位置做排斥與評分；目標掃描含寶藏/重物/殘骸/遺物/鬆散物，網格 BFS 路徑快取與可達性快取；卡住偵測覆蓋返程/補氣孔/脫困所有狀態，下方被擋先上鑽、三次脫困反轉；補氣孔與返程目標選取；選單優先選未解鎖關、否則重出航練習
 // 1.27.0: AI 導航強化——船骸網格 BFS 繞路、多段脫困狀態機與目標黑名單、可達性評分、平滑航向與更準確的威脅過濾；修正攜重物誤衝刺掉寶、返程誤入船骸門口、袋內未入庫就開選單等卡住問題
 // 1.26.0: 全自動遊玩模式（AI 自動潛水、撈金、規避威脅、返程交貨、買升級、選關推進，可掛機，B 鍵切換）；新增繁體中文語系（zht）
@@ -1327,15 +1328,20 @@ const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,esca
 function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathKey='';AI.rc=null;AI.lastX=dv.x;AI.lastY=dv.y}
 function aiNearSolid(x,y){return solidAt(x,y)||wreckSolid(x,y)}
 
-// ---- 全量威脅清單（位置/半徑/強度）----
+// ---- 全量威脅清單（位置/半徑/強度/速度，含觸手尖端與投射物預測）----
 function aiThreatList(){
-  const L=[];const push=(x,y,r,w)=>{if(isFinite(x)&&isFinite(y))L.push({x,y,r,w})};
-  for(const o of OCTOS){if(!o.alive||o.stun>0||o.passive||o.calm)continue;push(o.x,o.y,o.sleep?o.zone*.6:o.zone*1.2,1.7)}
-  for(const c of CRABS)push(c.x,groundY(c.x),60,.4);
-  for(const m of MINES)if(m.live)push(m.x,m.y,36,1);
-  for(const f of PUFFS)if(f.inf>.55)push(f.x,f.y,90,.8);
-  for(const j of HZJ)push(j.x,j.y,150,.8);
-  for(const z of ZAPS)push(z.x,z.y,46,1.2);
+  const L=[];const push=(x,y,r,w,vx=0,vy=0)=>{if(isFinite(x)&&isFinite(y))L.push({x,y,r,w,vx,vy})};
+  for(const o of OCTOS){
+    if(!o.alive||o.dead||o.stun>0||o.passive||o.calm)continue;
+    const R=(o.sleep?o.zone*.6:o.zone*.9)+(o.seg||0)*2;
+    push(o.x,o.y,R,1.3);
+    for(const t of(o.tents||[])){const a=t.st==='reach'||t.st==='hold'?1.5:.7;push(t.tx,t.ty,34,a)}
+  }
+  for(const c of CRABS)push(c.x,groundY(c.x),52,.35);
+  for(const m of MINES)if(m.live)push(m.x,m.y,40,1);
+  for(const f of PUFFS)if(f.inf>.55)push(f.x,f.y,95,.8,f.vx||0,f.vy||0);
+  for(const j of HZJ)push(j.x,j.y,130,.7);
+  for(const z of ZAPS)push(z.x,z.y,34,1.2,z.vx||0,z.vy||0);
   for(const g of GEYS){if(g.sz==='s'||g.st==='idle')continue;push(g.x,g.y,g.sz==='b'?95:65,.9)}
   if(VXT&&VX.stun<=0)push(VX.x,VX.y,VXR,1.5);
   if(KT){const pts=KT.p;for(let i=3;i<pts.length;i+=2)push(pts[i].x,pts[i].y,42,1)}
@@ -1343,11 +1349,16 @@ function aiThreatList(){
   if(ANG.on&&!ANG.dead){const[lx,ly]=angLure();push(lx,ly,66,.9);const[mx,my]=angMouth();if(ANG.st==='tell'||ANG.st==='lunge')push(mx,my,125,1.4)}
   return L;
 }
-function aiThreatPush(){
-  let px=0,py=0;
-  for(const t of aiThreatList()){const d=Math.hypot(t.x-dv.x,t.y-dv.y)||1;if(d<t.r){const w=(1-d/t.r)*t.w;px+=(dv.x-t.x)/d*w;py+=(dv.y-t.y)/d*w}}
-  const m=Math.hypot(px,py);if(m>1.6){px*=1.6/m;py*=1.6/m}
-  return[px,py];
+// 威脅排斥向量＋等級（0~1）；投射物/游速取 0.45 秒後預測位置
+function aiDanger(){
+  let px=0,py=0,level=0,near=1e9;
+  for(const t of aiThreatList()){
+    const fx=t.x+(t.vx||0)*.45,fy=t.y+(t.vy||0)*.45;
+    const d=Math.hypot(fx-dv.x,fy-dv.y)||1;near=Math.min(near,d);
+    if(d<t.r){const w=(1-d/t.r)*t.w;px+=(dv.x-fx)/d*w;py+=(dv.y-fy)/d*w;level=Math.max(level,(1-d/t.r)*t.w)}
+  }
+  const m=Math.hypot(px,py);if(m>2){px*=2/m;py*=2/m}
+  return{x:px,y:py,level,near};
 }
 // 某點附近威脅強度（0~1），用於目標評分懲罰
 function aiThreatAt(x,y){
@@ -1428,23 +1439,45 @@ function aiReturnTarget(){
   if(insideWreck(dv.x,dv.y)){const p=navPoint();if(p)return{x:p[0],y:p[1]}}
   return{x:BOATX,y:SURF+14}
 }
+// 在目標方向兩側挑一條前方無障礙、且遠離威脅的航線
+function aiPickDir(tx,ty,D){
+  const base=Math.atan2(ty-dv.y,tx-dv.x);
+  let best=base,bs=-1e9;
+  for(let k=-3;k<=3;k++){
+    const a=base+k*.4,cx=Math.cos(a),cy=Math.sin(a);
+    if(aiNearSolid(dv.x+cx*26,dv.y+cy*26))continue;
+    let s=Math.cos(a-base)*2+(cx*D.x+cy*D.y)*1.3;
+    if(s>bs){bs=s;best=a}
+  }
+  return best;
+}
 function aiSteerTo(x,y){
   const[wx,wy]=aiWaypoint(x,y);
-  let dx=wx-dv.x,dy=wy-dv.y;const d=Math.hypot(dx,dy)||1;
-  let ax=dx/d,ay=dy/d;
-  const[tx,ty]=aiThreatPush();ax+=tx*1.5;ay+=ty*1.5;
-  const al=Math.hypot(ax,ay)||1;ax/=al;ay/=al;
-  if(aiNearSolid(dv.x+ax*24,dv.y+ay*24)){const side=AI.escapeSide;const px=-ay*side,py=ax*side;ax=ax*.3+px;ay=ay*.3+py;const a2=Math.hypot(ax,ay)||1;ax/=a2;ay/=a2}
-  const want=Math.atan2(ay,ax);
-  if(AI.heading===null)AI.heading=want;
-  let dh=want-AI.heading;dh=Math.atan2(Math.sin(dh),Math.cos(dh));
-  AI.heading+=dh*Math.min(1,12/30);
+  const D=aiDanger();
+  let dirA;
+  if(D.level>.5){
+    // 貼近威脅：決策式逃離，主動拉開距離；若逃離方向撞牆則改走垂直側邊
+    dirA=Math.atan2(D.y,D.x);
+    if(aiNearSolid(dv.x+Math.cos(dirA)*26,dv.y+Math.sin(dirA)*26)){
+      dirA=Math.atan2(wy-dv.y,wx-dv.x)+AI.escapeSide*Math.PI/2;
+    }
+  }else{
+    dirA=aiPickDir(wx,wy,D);
+  }
+  if(AI.heading===null)AI.heading=dirA;
+  let dh=dirA-AI.heading;dh=Math.atan2(Math.sin(dh),Math.cos(dh));
+  AI.heading+=dh*Math.min(1,14/30);
   const hx=Math.cos(AI.heading),hy=Math.sin(AI.heading);
   keys.l=hx<-.25;keys.r=hx>.25;keys.u=hy<-.25;keys.d=hy>.25;
-  const threat=Math.hypot(tx,ty),ahead=aiNearSolid(dv.x+ax*26,dv.y+ay*26);
-  keys.dash=(d>140&&dv.st>.5&&threat<.4&&!ahead&&!dv.carry);
-  // 推進路徑快取
+  const ahead=aiNearSolid(dv.x+hx*26,dv.y+hy*26);
+  keys.dash=(Math.hypot(wx-dv.x,wy-dv.y)>140&&dv.st>.5&&D.level<.3&&!ahead&&!dv.carry);
   if(AI.path&&AI.path.length&&Math.hypot(AI.path[0][0]-dv.x,AI.path[0][1]-dv.y)<26)AI.path.shift();
+}
+// 卡住時找一條 30px 內開放的脫困方向
+function aiEscapeAngle(base){
+  const cands=[base+AI.escapeSide*Math.PI/2,base-AI.escapeSide*Math.PI/2,-Math.PI/2,base+Math.PI,0,Math.PI/2,base];
+  for(const a of cands){if(!aiNearSolid(dv.x+Math.cos(a)*30,dv.y+Math.sin(a)*30))return a}
+  return cands[0];
 }
 function aiThink(){
   if(G.o||ANG.hold||ANG.rl){
@@ -1471,22 +1504,24 @@ function aiThink(){
     const hx=Math.cos(AI.escapeA),hy=Math.sin(AI.escapeA);
     keys.l=hx<-.25;keys.r=hx>.25;keys.u=hy<-.25;keys.d=hy>.25;keys.dash=true;
   }else if(tgt)aiSteerTo(tgt.x,tgt.y);
-  // 卡住偵測：所有狀態（含返程）都執行
-  AI.stuckT+=1/30;
-  if(AI.stuckT>1.3){
-    const moved=Math.hypot(dv.x-AI.lastX,dv.y-AI.lastY);
-    if(moved<26){
-      AI.escapeN++;AI.escapeSide=-AI.escapeSide;
-      let base=tgt?Math.atan2(tgt.y-dv.y,tgt.x-dv.x):(AI.heading||0);
-      if(aiNearSolid(dv.x,dv.y+24))base=-Math.PI/2; // 下方被擋：先往上鑽
-      const turn=AI.escapeN>=3?Math.PI:(AI.escapeN%2?1:-1)*Math.PI/2;
-      AI.escapeA=base+turn+(Math.random()-.5)*.5;
-      AI.escapeT=.8;
-      if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;
-      AI.target=null;AI.path=[];AI.heading=null;
-      if(AI.escapeN>=4){AI.escapeN=0;const t=aiReturnTarget();aiSteerTo(t.x,t.y)}
-    }else AI.escapeN=0;
-    AI.lastX=dv.x;AI.lastY=dv.y;AI.stuckT=0;
+  // 卡住偵測：鋸木/咬住中的刻意靜止不計；其餘狀態（含返程）一律計時
+  const chopping=dv.gripOn||!!dv.jawPt;
+  if(chopping){AI.stuckT=0;AI.lastX=dv.x;AI.lastY=dv.y}
+  else{
+    AI.stuckT+=1/30;
+    if(AI.stuckT>1.3){
+      const moved=Math.hypot(dv.x-AI.lastX,dv.y-AI.lastY);
+      if(moved<26){
+        AI.escapeN++;AI.escapeSide=-AI.escapeSide;
+        const base=tgt?Math.atan2(tgt.y-dv.y,tgt.x-dv.x):(AI.heading||0);
+        AI.escapeA=aiEscapeAngle(base)+(Math.random()-.5)*.3;
+        AI.escapeT=.8;
+        if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;
+        AI.target=null;AI.path=[];AI.heading=null;
+        if(AI.escapeN>=4){AI.escapeN=0;const t=aiReturnTarget();aiSteerTo(t.x,t.y)}
+      }else AI.escapeN=0;
+      AI.lastX=dv.x;AI.lastY=dv.y;AI.stuckT=0;
+    }
   }
   if(!AI.boardOpened&&atSurf&&bag===0&&!dv.carry&&!G.o&&Math.abs(dv.x-BOATX)<220&&(canBuy()||canLeave())){AI.boardOpened=true;showBoard()}
 }
