@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.29.0</title>
+<title>Deep Loot v1.30.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.29.0';
+const VERSION='1.30.0';
 // Changelog
+// 1.30.0: AI 先規劃後執行——氧氣預算模型（剩餘秒數、返程含水平/垂直距離估時、往返可行性評分），必返程→補氣孔→撈金分層決策；BFS 路徑鏈快取；目標存活驗證與貼近無進度放棄；八方開水航線取捨，岩架被困優先上浮、連續脫困先出水
 // 1.29.0: 強化怪物閃避——觸手尖端/投射物速度預測納入威脅，貼近時決策式逃離並避開撞牆方向；航線兩側取開水方向；卡住偵測排除鋸木/咬住中的刻意靜止；脫困角度先探測 30px 開放方向再脫離
 // 1.28.0: AI 全資料感知——讀取全部怪物/水雷/毒泡/觸手/裂縫/鮟鱇誘餌與嘴部位置做排斥與評分；目標掃描含寶藏/重物/殘骸/遺物/鬆散物，網格 BFS 路徑快取與可達性快取；卡住偵測覆蓋返程/補氣孔/脫困所有狀態，下方被擋先上鑽、三次脫困反轉；補氣孔與返程目標選取；選單優先選未解鎖關、否則重出航練習
 // 1.27.0: AI 導航強化——船骸網格 BFS 繞路、多段脫困狀態機與目標黑名單、可達性評分、平滑航向與更準確的威脅過濾；修正攜重物誤衝刺掉寶、返程誤入船骸門口、袋內未入庫就開選單等卡住問題
@@ -1324,9 +1325,25 @@ let HUDB=0,HUDL=1e9,bag=0,bank=0,TOTAL=0,LOST=0,HB=0,cleanTold=false,bonusTold=f
 const ptr={sx:600,sy:300,wx:600,wy:300,down:false};
 const keys={l:false,r:false,u:false,d:false,dash:false};
 // ================= 全自動 AI（全資料感知：寶藏/怪物/威脅/補氣孔/網格路徑 + 脫困狀態機） =================
-const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,escapeSide:1,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false,path:[],pathT:0,pathKey:'',rc:null};
-function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathKey='';AI.rc=null;AI.lastX=dv.x;AI.lastY=dv.y}
+const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,escapeSide:1,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false,path:[],pathT:0,pathKey:'',rc:null,planT:0,holdT:null,holdBag:0,holdCells:null};
+function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathKey='';AI.rc=null;AI.planT=0;AI.holdT=null;AI.holdBag=0;AI.holdCells=null;AI.lastX=dv.x;AI.lastY=dv.y}
 function aiNearSolid(x,y){return solidAt(x,y)||wreckSolid(x,y)}
+
+// ---- 氧氣預算 ----
+function aiAirSec(){return dv.air*(90+20*UP('air'))}            // 剩餘可活動秒數
+function aiBoatPos(){return insideWreck(dv.x,dv.y)?nearDoor():[BOATX,SURF+14]}
+// 返程估時：船骸內用走廊距離，外部水域用直線距離/航速（含水平與垂直）
+function aiReturnSec(){
+  if(insideWreck(dv.x,dv.y))return airNeed();
+  const bp=[BOATX,SURF+14],sp=120*(1+.1*UP('fins'));
+  return Math.hypot(bp[0]-dv.x,bp[1]-dv.y)/sp+2;
+}
+// 往返（潛到目標再回船）估時是否在氧氣預算內
+function aiFeasible(x,y){
+  const d1=Math.hypot(x-dv.x,y-dv.y),bp=aiBoatPos();
+  const rt=(d1+Math.hypot(x-bp[0],y-bp[1]))/130+2;
+  return rt<=aiAirSec()*.8;
+}
 
 // ---- 全量威脅清單（位置/半徑/強度/速度，含觸手尖端與投射物預測）----
 function aiThreatList(){
@@ -1381,7 +1398,7 @@ function aiScanTargets(){
   return arr;
 }
 
-// ---- 船骸網格 BFS ----
+// ---- 船骸網格 BFS（先算完整路徑鏈，再逐點執行）----
 function aiCell(x,y){const[lx,ly]=toLocal(WRECK,x,y);return[Math.floor((lx+NAV.M)/NAV.S),Math.floor((ly+NAV.M)/NAV.S)]}
 function aiOpen(i,j){if(i<0||j<0||i>=NAV.nw||j>=NAV.nh)return false;return NAV.d[j*NAV.nw+i]>=0}
 function aiBFS(tx,ty){
@@ -1402,9 +1419,19 @@ function aiReachable(x,y){
   if(!NAV||!insideWreck(dv.x,dv.y))return insideWreck(x,y)?false:true;
   return aiBFS(x,y)!==null;
 }
+// 目標是否仍真實存在（防止抓到已消失的鬆散物/殘骸座標）
+function aiTargetAlive(t){
+  if(!t)return false;
+  if(MAPP&&Math.hypot(MAPP.x-t.x,MAPP.y-t.y)<20)return true;
+  for(const b of bodies){if(b.dead||b.cells<=0)continue;if(Math.hypot(b.x-t.x,b.y-t.y)<14)return true}
+  for(const c of LOOSE)if(Math.hypot(c.x-t.x,c.y-t.y)<14)return true;
+  for(const c of SEAC)if(Math.hypot(c.x-t.x,c.y-t.y)<14)return true;
+  return false;
+}
 function aiPickTarget(){
   const cands=aiScanTargets();
   if(!AI.rc||AI.rc.t!==time)AI.rc={t:time,map:{}};
+  const bp=aiBoatPos(),airSec=aiAirSec();
   let best=null,bs=-1;
   for(const c of cands){
     const key=Math.round(c.x)+','+Math.round(c.y);
@@ -1413,9 +1440,13 @@ function aiPickTarget(){
     if(reach===undefined){reach=aiReachable(c.x,c.y)?1:0;AI.rc.map[key]=reach}
     if(!reach){AI.black[key]=time+8;continue}
     const d=Math.hypot(c.x-dv.x,c.y-dv.y)||1;
+    // 氧氣可行性：往返估時 vs 剩餘氧氣，不夠就跳過並列入黑名單
+    const rt=(d+Math.hypot(c.x-bp[0],c.y-bp[1]))/130+2;
+    const oxy=Math.min(1,airSec*.8/Math.max(rt,1));
+    if(oxy<.25){AI.black[key]=time+8;continue}
     const rw=clearLine(dv.x,dv.y,c.x,c.y)?1:.7;
     const threat=aiThreatAt(c.x,c.y);
-    const s=c.val/(d/130+1)*rw*(1-threat*.55);
+    const s=c.val/(d/130+1)*rw*(1-threat*.55)*oxy;
     if(s>bs){bs=s;best=c}
   }
   return best;
@@ -1435,18 +1466,21 @@ function aiAirTarget(){
   return best;
 }
 function aiReturnTarget(){
-  if(dv.air<.25&&!insideWreck(dv.x,dv.y))return{x:dv.x,y:SURF+10};
+  if(!insideWreck(dv.x,dv.y)&&(dv.air<.25||AI.escapeN>=2))return{x:dv.x,y:SURF+10};
   if(insideWreck(dv.x,dv.y)){const p=navPoint();if(p)return{x:p[0],y:p[1]}}
   return{x:BOATX,y:SURF+14}
 }
-// 在目標方向兩側挑一條前方無障礙、且遠離威脅的航線
+function aiOpenAt(ax,ay,rad){return !aiNearSolid(dv.x+ax*rad,dv.y+ay*rad)}
+// 八方取捨：挑前方與深處都開闊、貼近目標方向且遠離威脅的航線
 function aiPickDir(tx,ty,D){
   const base=Math.atan2(ty-dv.y,tx-dv.x);
   let best=base,bs=-1e9;
-  for(let k=-3;k<=3;k++){
-    const a=base+k*.4,cx=Math.cos(a),cy=Math.sin(a);
-    if(aiNearSolid(dv.x+cx*26,dv.y+cy*26))continue;
+  for(let k=0;k<8;k++){
+    const a=base-Math.PI+k*Math.PI/4,cx=Math.cos(a),cy=Math.sin(a);
+    if(!aiOpenAt(cx,cy,24))continue;
     let s=Math.cos(a-base)*2+(cx*D.x+cy*D.y)*1.3;
+    if(aiOpenAt(cx,cy,44))s+=.8;
+    if(cy<0)s+=.15;
     if(s>bs){bs=s;best=a}
   }
   return best;
@@ -1473,9 +1507,12 @@ function aiSteerTo(x,y){
   keys.dash=(Math.hypot(wx-dv.x,wy-dv.y)>140&&dv.st>.5&&D.level<.3&&!ahead&&!dv.carry);
   if(AI.path&&AI.path.length&&Math.hypot(AI.path[0][0]-dv.x,AI.path[0][1]-dv.y)<26)AI.path.shift();
 }
-// 卡住時找一條 30px 內開放的脫困方向
+// 卡住時找一條 30px 內開放的脫困方向；下方被堵時優先上浮
 function aiEscapeAngle(base){
-  const cands=[base+AI.escapeSide*Math.PI/2,base-AI.escapeSide*Math.PI/2,-Math.PI/2,base+Math.PI,0,Math.PI/2,base];
+  const trappedFloor=aiNearSolid(dv.x,dv.y+24);
+  const cands=trappedFloor
+    ?[-Math.PI/2,base+AI.escapeSide*Math.PI/2,base-AI.escapeSide*Math.PI/2,base+Math.PI,0,Math.PI/2,base]
+    :[base+AI.escapeSide*Math.PI/2,base-AI.escapeSide*Math.PI/2,-Math.PI/2,base+Math.PI,0,Math.PI/2,base];
   for(const a of cands){if(!aiNearSolid(dv.x+Math.cos(a)*30,dv.y+Math.sin(a)*30))return a}
   return cands[0];
 }
@@ -1485,17 +1522,35 @@ function aiThink(){
     AI.dashPulse-=1/30;if(AI.dashPulse<=0){keys.dash=true;AI.dashPulse=.22}else keys.dash=false;
     return;
   }
-  const needReturn=dv.air<.45||(bag>0&&dv.air<.62)||goalMet()||!!dv.carry;
+  // 氧氣預算分層：必返程 > 補氣孔 > 撈金
+  const airSec=aiAirSec(),retSec=aiReturnSec();
+  const carryReturn=bag>0&&airSec<retSec*1.35;
+  const mustReturn=airSec<=retSec*1.15||carryReturn||goalMet()||!!dv.carry||dv.air<.25;
+  const ventFirst=!mustReturn&&bag===0&&airSec<retSec*2.3;
   let tgt=null;
   if(ANG.on&&!ANG.dead&&ANG.stun>0&&ANG.body)tgt={x:ANG.x,y:ANG.y};
-  else if(needReturn)tgt=aiReturnTarget();
-  else if(dv.air<.5&&bag===0){const v=aiAirTarget();if(v)tgt=v}
+  else if(mustReturn)tgt=aiReturnTarget();
+  else if(ventFirst){const v=aiAirTarget();tgt=v||aiReturnTarget()}
   else{
-    if(AI.target){const blk=!clearLine(dv.x,dv.y,AI.target.x,AI.target.y);AI.blockT=blk?AI.blockT+1/30:0;if(AI.blockT>2.5){AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;AI.target=null;AI.path=[];AI.blockT=0}}
-    if(!AI.target||AI.target.dead||Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)>40){AI.target=aiPickTarget();AI.path=[];AI.pathKey=''}
+    const dropTarget=(reason)=>{if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;AI.target=null;AI.path=[];AI.blockT=0;AI.holdT=null};
+    if(AI.target){
+      const blk=!clearLine(dv.x,dv.y,AI.target.x,AI.target.y);AI.blockT=blk?AI.blockT+1/30:0;
+      if(AI.blockT>2.5)dropTarget();
+      else if(!aiTargetAlive(AI.target)||!aiFeasible(AI.target.x,AI.target.y))dropTarget();
+    }
+    if(!AI.target||AI.target.dead||!aiTargetAlive(AI.target)||Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)>40){AI.target=aiPickTarget();AI.path=[];AI.pathKey='';AI.holdT=null}
+    if(AI.target){
+      // 貼近目標但袋內/血量無進度超過 2.5 秒：視為砍不到，放棄換目標
+      const close=Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)<34;
+      const curCells=AI.target.cells==null?null:AI.target.cells;
+      if(close){
+        if(AI.holdT===null||bag!==AI.holdBag||curCells!==AI.holdCells){AI.holdT=0;AI.holdBag=bag;AI.holdCells=curCells}
+        else{AI.holdT+=1/30;if(AI.holdT>2.5)dropTarget()}
+      }else AI.holdT=null;
+    }
     if(AI.target){
       const key=Math.round(AI.target.x)+','+Math.round(AI.target.y);
-      if(key!==AI.pathKey||time-AI.pathT>.8){const p=aiBFS(AI.target.x,AI.target.y);AI.path=p||[];AI.pathKey=key;AI.pathT=time}
+      if(key!==AI.pathKey||AI.path.length===0||time-AI.pathT>2){const p=aiBFS(AI.target.x,AI.target.y);AI.path=p||[];AI.pathKey=key;AI.pathT=time}
       tgt=AI.target;
     }else tgt=aiReturnTarget();
   }
