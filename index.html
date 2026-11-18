@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.30.0</title>
+<title>Deep Loot v1.31.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.30.0';
+const VERSION='1.31.0';
 // Changelog
+// 1.31.0: 導航升級 A*——船骸網格與外部水域 coarse 網格皆改 A*（二元堆、歐幾里得啟發式），外部全域繞過岩架/懸崖；路徑快取 3 秒；外部格子以 body 半徑 box 判定開放；無進度揮斧納入卡住偵測；脫困選最開闊方向並維持更久，避免在凹槽兩側彈跳
 // 1.30.0: AI 先規劃後執行——氧氣預算模型（剩餘秒數、返程含水平/垂直距離估時、往返可行性評分），必返程→補氣孔→撈金分層決策；BFS 路徑鏈快取；目標存活驗證與貼近無進度放棄；八方開水航線取捨，岩架被困優先上浮、連續脫困先出水
 // 1.29.0: 強化怪物閃避——觸手尖端/投射物速度預測納入威脅，貼近時決策式逃離並避開撞牆方向；航線兩側取開水方向；卡住偵測排除鋸木/咬住中的刻意靜止；脫困角度先探測 30px 開放方向再脫離
 // 1.28.0: AI 全資料感知——讀取全部怪物/水雷/毒泡/觸手/裂縫/鮟鱇誘餌與嘴部位置做排斥與評分；目標掃描含寶藏/重物/殘骸/遺物/鬆散物，網格 BFS 路徑快取與可達性快取；卡住偵測覆蓋返程/補氣孔/脫困所有狀態，下方被擋先上鑽、三次脫困反轉；補氣孔與返程目標選取；選單優先選未解鎖關、否則重出航練習
@@ -1325,8 +1326,8 @@ let HUDB=0,HUDL=1e9,bag=0,bank=0,TOTAL=0,LOST=0,HB=0,cleanTold=false,bonusTold=f
 const ptr={sx:600,sy:300,wx:600,wy:300,down:false};
 const keys={l:false,r:false,u:false,d:false,dash:false};
 // ================= 全自動 AI（全資料感知：寶藏/怪物/威脅/補氣孔/網格路徑 + 脫困狀態機） =================
-const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,escapeSide:1,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false,path:[],pathT:0,pathKey:'',rc:null,planT:0,holdT:null,holdBag:0,holdCells:null};
-function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathKey='';AI.rc=null;AI.planT=0;AI.holdT=null;AI.holdBag=0;AI.holdCells=null;AI.lastX=dv.x;AI.lastY=dv.y}
+const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,escapeSide:1,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false,path:[],pathT:0,pathKey:'',extPath:[],extKey:'',extT:0,rc:null,planT:0,holdT:null,holdBag:0,holdCells:null,grindT:null,grindBag:0,grindCells:null,grindX:0,grindY:0};
+function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathKey='';AI.extPath=[];AI.extKey='';AI.rc=null;AI.planT=0;AI.holdT=null;AI.holdBag=0;AI.holdCells=null;AI.grindT=null;AI.grindX=dv.x;AI.grindY=dv.y;AI.lastX=dv.x;AI.lastY=dv.y}
 function aiNearSolid(x,y){return solidAt(x,y)||wreckSolid(x,y)}
 
 // ---- 氧氣預算 ----
@@ -1398,20 +1399,74 @@ function aiScanTargets(){
   return arr;
 }
 
-// ---- 船骸網格 BFS（先算完整路徑鏈，再逐點執行）----
+// ---- A* 二元堆 ----
+function aiHeapPush(h,f){h.push(f);let i=h.length-1;while(i>0){const p=(i-1)>>1;if(h[p][0]<=h[i][0])break;const t=h[p];h[p]=h[i];h[i]=t;i=p}}
+function aiHeapPop(h){const top=h[0],last=h.pop();if(h.length){h[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<h.length&&h[l][0]<h[m][0])m=l;if(r<h.length&&h[r][0]<h[m][0])m=r;if(m===i)break;const t=h[m];h[m]=h[i];h[i]=t;i=m}}return top}
+// ---- 船骸網格 A*（先算完整路徑鏈，再逐點執行）----
 function aiCell(x,y){const[lx,ly]=toLocal(WRECK,x,y);return[Math.floor((lx+NAV.M)/NAV.S),Math.floor((ly+NAV.M)/NAV.S)]}
 function aiOpen(i,j){if(i<0||j<0||i>=NAV.nw||j>=NAV.nh)return false;return NAV.d[j*NAV.nw+i]>=0}
 function aiBFS(tx,ty){
   if(!NAV)return null;
+  const gw=NAV.nw,gh=NAV.nh;
   const[si,sj]=aiCell(dv.x,dv.y);if(!aiOpen(si,sj))return null;
-  let[ti,tj]=aiCell(tx,ty);ti=Math.max(0,Math.min(NAV.nw-1,ti));tj=Math.max(0,Math.min(NAV.nh-1,tj));
-  const N=NAV.nw*NAV.nh,parent=new Int32Array(N).fill(-1),q=[sj*NAV.nw+si];parent[q[0]]=q[0];
-  const near=k=>{const i=k%NAV.nw,j=(k/NAV.nw)|0;return Math.abs(i-ti)<=2&&Math.abs(j-tj)<=2};
-  let head=0,found=-1;
-  while(head<q.length){const k=q[head++];if(near(k)){found=k;break}const i=k%NAV.nw,j=(k/NAV.nw)|0;
-    for(const[di,dj]of[[1,0],[-1,0],[0,1],[0,-1]]){const a=i+di,c=j+dj;if(!aiOpen(a,c))continue;const n=c*NAV.nw+a;if(parent[n]!==-1)continue;parent[n]=k;q.push(n)}}
+  let[ti,tj]=aiCell(tx,ty);ti=Math.max(0,Math.min(gw-1,ti));tj=Math.max(0,Math.min(gh-1,tj));
+  if(!aiOpen(ti,tj)){let bd=1e9,bt=-1;
+    for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){if(!aiOpen(i,j))continue;const dd=Math.hypot(i-ti,j-tj);if(dd<bd){bd=dd;bt=j*gw+i}}
+    if(bt<0)return null;ti=bt%gw;tj=(bt/gw)|0}
+  const N=gw*gh,g=new Float32Array(N).fill(1e9),par=new Int32Array(N).fill(-1),closed=new Uint8Array(N);
+  const s=sj*gw+si,t=tj*gw+ti;g[s]=0;
+  const open=[[Math.hypot(ti-si,tj-sj),s]];
+  const hh=(i,j)=>Math.hypot(i-ti,j-tj);
+  let found=-1,exp=0;
+  while(open.length&&exp<6000){
+    const[,k]=aiHeapPop(open);if(closed[k])continue;closed[k]=1;
+    if(k===t){found=k;break}
+    const i=k%gw,j=(k/gw)|0;exp++;
+    for(const[di,dj]of[[1,0],[-1,0],[0,1],[0,-1]]){
+      const a=i+di,c=j+dj;if(a<0||c<0||a>=gw||c>=gh)continue;const n=c*gw+a;if(!aiOpen(a,c)||closed[n])continue;
+      const ng=g[k]+1;if(ng<g[n]){g[n]=ng;par[n]=k;aiHeapPush(open,[ng+hh(a,c),n])}
+    }
+  }
   if(found<0)return null;
-  const path=[];let k=found;while(parent[k]!==k){path.push(NAV.W_(k%NAV.nw,(k/NAV.nw)|0));k=parent[k]}
+  const path=[];let k=found,guard=0;
+  while(par[k]!==-1&&guard++<N){path.push(NAV.W_(k%gw,(k/gw)|0));k=par[k]}
+  path.push(NAV.W_(si,sj));path.reverse();return path;
+}
+// ---- 外部水域 coarse 網格 A*（繞過岩架/懸崖）----
+const EXT_CS=48,EXT_GW=Math.ceil(WW/EXT_CS),EXT_GH=Math.ceil(WH/EXT_CS);
+function extOpen(i,j){
+  if(i<0||j<0||i>=EXT_GW||j>=EXT_GH)return false;
+  const x=i*EXT_CS+EXT_CS/2,y=j*EXT_CS+EXT_CS/2;
+  if(y<0||y>=WH)return false;
+  for(const[ox,oy]of[[0,0],[-14,0],[14,0],[0,-14],[0,14]]){if(solidAt(x+ox,y+oy))return false}
+  if(y>groundY(x)+16)return false;
+  return true;
+}
+function aiExtAStar(tx,ty){
+  const cs=EXT_CS,gw=EXT_GW,gh=EXT_GH;
+  const si=Math.max(0,Math.min(gw-1,(dv.x/cs)|0)),sj=Math.max(0,Math.min(gh-1,(dv.y/cs)|0));
+  if(!extOpen(si,sj))return null;
+  let ti=Math.max(0,Math.min(gw-1,(tx/cs)|0)),tj=Math.max(0,Math.min(gh-1,(ty/cs)|0));
+  if(!extOpen(ti,tj)){let bd=1e9,bt=-1;
+    for(let j=Math.max(0,tj-8);j<=Math.min(gh-1,tj+8);j++)for(let i=Math.max(0,ti-8);i<=Math.min(gw-1,ti+8);i++){if(!extOpen(i,j))continue;const dd=Math.hypot(i-ti,j-tj);if(dd<bd){bd=dd;bt=j*gw+i}}
+    if(bt<0)return null;ti=bt%gw;tj=(bt/gw)|0}
+  const N=gw*gh,g=new Float32Array(N).fill(1e9),par=new Int32Array(N).fill(-1),closed=new Uint8Array(N);
+  const s=sj*gw+si,t=tj*gw+ti;g[s]=0;
+  const open=[[Math.hypot(ti-si,tj-sj),s]];
+  const hh=(i,j)=>Math.hypot(i-ti,j-tj);
+  let found=-1,exp=0;
+  while(open.length&&exp<5000){
+    const[,k]=aiHeapPop(open);if(closed[k])continue;closed[k]=1;
+    if(k===t){found=k;break}
+    const i=k%gw,j=(k/gw)|0;exp++;
+    for(const[di,dj]of[[1,0],[-1,0],[0,1],[0,-1]]){
+      const a=i+di,c=j+dj;if(a<0||c<0||a>=gw||c>=gh)continue;const n=c*gw+a;if(!extOpen(a,c)||closed[n])continue;
+      const ng=g[k]+1;if(ng<g[n]){g[n]=ng;par[n]=k;aiHeapPush(open,[ng+hh(a,c),n])}
+    }
+  }
+  if(found<0)return null;
+  const path=[];let k=found,guard=0;
+  while(par[k]!==-1&&guard++<N){const i=k%gw,j=(k/gw)|0;path.push([i*cs+cs/2,j*cs+cs/2]);k=par[k]}
   path.reverse();return path;
 }
 function aiReachable(x,y){
@@ -1453,11 +1508,19 @@ function aiPickTarget(){
 }
 function aiWaypoint(x,y){
   if(clearLine(dv.x,dv.y,x,y))return[x,y];
-  if(!insideWreck(dv.x,dv.y))return[x,y];
-  if(AI.path&&AI.path.length)return AI.path[0];
-  const p=aiBFS(x,y);if(p&&p.length){AI.path=p;return p[0]}
-  const np=navPoint();if(np)return[np[0],np[1]];
-  const d=nearDoor();return[d[0],d[1]];
+  if(insideWreck(dv.x,dv.y)){
+    AI.extPath=[];
+    if(AI.path&&AI.path.length)return AI.path[0];
+    const p=aiBFS(x,y);if(p&&p.length){AI.path=p;return p[0]}
+    const np=navPoint();if(np)return[np[0],np[1]];
+    const d=nearDoor();return[d[0],d[1]];
+  }
+  // 外部水域：A* 全域繞路，結果快取 3 秒
+  const key=Math.round(x/EXT_CS)+','+Math.round(y/EXT_CS);
+  if(AI.extPath.length&&AI.extKey===key&&time-AI.extT<3)return AI.extPath[0];
+  const p=aiExtAStar(x,y);AI.extPath=p||[];AI.extKey=key;AI.extT=time;
+  if(AI.extPath.length)return AI.extPath[0];
+  return[dv.x,SURF+10];
 }
 function aiAirTarget(){
   let best=null,bd=280;
@@ -1506,15 +1569,20 @@ function aiSteerTo(x,y){
   const ahead=aiNearSolid(dv.x+hx*26,dv.y+hy*26);
   keys.dash=(Math.hypot(wx-dv.x,wy-dv.y)>140&&dv.st>.5&&D.level<.3&&!ahead&&!dv.carry);
   if(AI.path&&AI.path.length&&Math.hypot(AI.path[0][0]-dv.x,AI.path[0][1]-dv.y)<26)AI.path.shift();
+  if(AI.extPath&&AI.extPath.length&&Math.hypot(AI.extPath[0][0]-dv.x,AI.extPath[0][1]-dv.y)<26)AI.extPath.shift();
 }
-// 卡住時找一條 30px 內開放的脫困方向；下方被堵時優先上浮
+// 卡住時選一條最開闊的脫困方向（30/50px 都開放加分）；下方被堵時優先上浮
 function aiEscapeAngle(base){
   const trappedFloor=aiNearSolid(dv.x,dv.y+24);
-  const cands=trappedFloor
-    ?[-Math.PI/2,base+AI.escapeSide*Math.PI/2,base-AI.escapeSide*Math.PI/2,base+Math.PI,0,Math.PI/2,base]
-    :[base+AI.escapeSide*Math.PI/2,base-AI.escapeSide*Math.PI/2,-Math.PI/2,base+Math.PI,0,Math.PI/2,base];
-  for(const a of cands){if(!aiNearSolid(dv.x+Math.cos(a)*30,dv.y+Math.sin(a)*30))return a}
-  return cands[0];
+  let best=base,bs=-1e9;
+  for(let k=0;k<8;k++){
+    const a=base-Math.PI+k*Math.PI/4,cx=Math.cos(a),cy=Math.sin(a);
+    const o30=!aiNearSolid(dv.x+cx*30,dv.y+cy*30),o50=!aiNearSolid(dv.x+cx*50,dv.y+cy*50);
+    if(!o30)continue;
+    let s=(o50?2:0)+(trappedFloor&&cy<0?1:0)+Math.cos(a-base)*.3;
+    if(s>bs){bs=s;best=a}
+  }
+  return best;
 }
 function aiThink(){
   if(G.o||ANG.hold||ANG.rl){
@@ -1532,16 +1600,16 @@ function aiThink(){
   else if(mustReturn)tgt=aiReturnTarget();
   else if(ventFirst){const v=aiAirTarget();tgt=v||aiReturnTarget()}
   else{
-    const dropTarget=(reason)=>{if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;AI.target=null;AI.path=[];AI.blockT=0;AI.holdT=null};
+    const dropTarget=(reason)=>{if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;AI.target=null;AI.path=[];AI.extPath=[];AI.blockT=0;AI.holdT=null};
     if(AI.target){
       const blk=!clearLine(dv.x,dv.y,AI.target.x,AI.target.y);AI.blockT=blk?AI.blockT+1/30:0;
       if(AI.blockT>2.5)dropTarget();
       else if(!aiTargetAlive(AI.target)||!aiFeasible(AI.target.x,AI.target.y))dropTarget();
     }
-    if(!AI.target||AI.target.dead||!aiTargetAlive(AI.target)||Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)>40){AI.target=aiPickTarget();AI.path=[];AI.pathKey='';AI.holdT=null}
+    if(!AI.target||AI.target.dead||!aiTargetAlive(AI.target)||Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)>40){AI.target=aiPickTarget();AI.path=[];AI.extPath=[];AI.pathKey='';AI.holdT=null}
     if(AI.target){
-      // 貼近目標但袋內/血量無進度超過 2.5 秒：視為砍不到，放棄換目標
-      const close=Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)<34;
+      // 貼近目標（80px 內）但袋內/血量無進度超過 2.5 秒：視為砍不到，放棄換目標
+      const close=Math.hypot(AI.target.x-dv.x,AI.target.y-dv.y)<80;
       const curCells=AI.target.cells==null?null:AI.target.cells;
       if(close){
         if(AI.holdT===null||bag!==AI.holdBag||curCells!==AI.holdCells){AI.holdT=0;AI.holdBag=bag;AI.holdCells=curCells}
@@ -1559,20 +1627,34 @@ function aiThink(){
     const hx=Math.cos(AI.escapeA),hy=Math.sin(AI.escapeA);
     keys.l=hx<-.25;keys.r=hx>.25;keys.u=hy<-.25;keys.d=hy>.25;keys.dash=true;
   }else if(tgt)aiSteerTo(tgt.x,tgt.y);
-  // 卡住偵測：鋸木/咬住中的刻意靜止不計；其餘狀態（含返程）一律計時
+  // 卡住偵測：鋸木/咬住中的刻意靜止不計；但若原地磨太久且袋內/血量無進度，照樣判定卡住
   const chopping=dv.gripOn||!!dv.jawPt;
-  if(chopping){AI.stuckT=0;AI.lastX=dv.x;AI.lastY=dv.y}
-  else{
+  if(chopping){
+    const moved=Math.hypot(dv.x-AI.grindX,dv.y-AI.grindY);
+    const curCells=AI.target?AI.target.cells:null;
+    const progressed=bag!==AI.grindBag||curCells!==AI.grindCells;
+    if(AI.grindT===null||progressed||moved>18){AI.grindT=0;AI.grindBag=bag;AI.grindCells=curCells;AI.grindX=dv.x;AI.grindY=dv.y}
+    else{AI.grindT+=1/30;
+      if(AI.grindT>3.5){
+        if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;
+        AI.target=null;AI.path=[];AI.extPath=[];AI.grindT=null;
+        AI.escapeN++;AI.escapeSide=-AI.escapeSide;
+        const base=tgt?Math.atan2(tgt.y-dv.y,tgt.x-dv.x):(AI.heading||0);
+        AI.escapeA=aiEscapeAngle(base)+(Math.random()-.5)*.2;AI.escapeT=1.4;
+      }
+    }
+    AI.stuckT=0;AI.lastX=dv.x;AI.lastY=dv.y;
+  }else{AI.grindT=null;
     AI.stuckT+=1/30;
     if(AI.stuckT>1.3){
       const moved=Math.hypot(dv.x-AI.lastX,dv.y-AI.lastY);
       if(moved<26){
         AI.escapeN++;AI.escapeSide=-AI.escapeSide;
         const base=tgt?Math.atan2(tgt.y-dv.y,tgt.x-dv.x):(AI.heading||0);
-        AI.escapeA=aiEscapeAngle(base)+(Math.random()-.5)*.3;
-        AI.escapeT=.8;
+        AI.escapeA=aiEscapeAngle(base)+(Math.random()-.5)*.2;
+        AI.escapeT=1.4;
         if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;
-        AI.target=null;AI.path=[];AI.heading=null;
+        AI.target=null;AI.path=[];AI.extPath=[];AI.heading=null;
         if(AI.escapeN>=4){AI.escapeN=0;const t=aiReturnTarget();aiSteerTo(t.x,t.y)}
       }else AI.escapeN=0;
       AI.lastX=dv.x;AI.lastY=dv.y;AI.stuckT=0;
