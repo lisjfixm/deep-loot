@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.32.0</title>
+<title>Deep Loot v1.33.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.32.0';
+const VERSION='1.33.0';
 // Changelog
+// 1.33.0: Boss 主動戰術——暈眩貼身輸出、將脫暈預先拉開，未暈眩維持環帶距離、tell 階段垂直側閃、避開誘餌光點，lunge 帶速度預測；目標評分袋滿排除重物、解鎖必需地圖加權，攜重物直線返程；動態升級（黑暗關先補燈）；選關優先續攻當前主線關；選關旅行重入守衛，脫困衝刺不再掉重物，掙脫連打加快
 // 1.32.0: AI 決策深化——目標保留來源物件引用，存活/無進度判讀讀取真實 cells，遺物碎片納入掃描；航速計入魚鰭升級、重物返程拖慢，返程走廊模型用於可行性評分；A* 八方向對角移動＋路徑平滑，外部可達性走全域 A* 檢查；威脅逃離在八方開水中選向，盜金蟹本體納入威脅，鮟鱇未暈眩主動保持距離；袋滿 150 或金額達標即返程；選關優先走主線下一關；外部格子多取樣降低穿牆，脫困依實際開放水選向並延長
 // 1.31.0: 導航升級 A*——船骸網格與外部水域 coarse 網格皆改 A*（二元堆、歐幾里得啟發式），外部全域繞過岩架/懸崖；路徑快取 3 秒；外部格子以 body 半徑 box 判定開放；無進度揮斧納入卡住偵測；脫困選最開闊方向並維持更久，避免在凹槽兩側彈跳
 // 1.30.0: AI 先規劃後執行——氧氣預算模型（剩餘秒數、返程含水平/垂直距離估時、往返可行性評分），必返程→補氣孔→撈金分層決策；BFS 路徑鏈快取；目標存活驗證與貼近無進度放棄；八方開水航線取捨，岩架被困優先上浮、連續脫困先出水
@@ -1327,7 +1328,7 @@ let HUDB=0,HUDL=1e9,bag=0,bank=0,TOTAL=0,LOST=0,HB=0,cleanTold=false,bonusTold=f
 const ptr={sx:600,sy:300,wx:600,wy:300,down:false};
 const keys={l:false,r:false,u:false,d:false,dash:false};
 // ================= 全自動 AI（全資料感知：寶藏/怪物/威脅/補氣孔/網格路徑 + 脫困狀態機） =================
-const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,escapeSide:1,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false,path:[],pathT:0,pathKey:'',extPath:[],extKey:'',extT:0,rc:null,planT:0,holdT:null,holdBag:0,holdCells:null,grindT:null,grindBag:0,grindCells:null,grindX:0,grindY:0};
+const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,escapeSide:1,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false,path:[],pathT:0,pathKey:'',extPath:[],extKey:'',extT:0,rc:null,planT:0,holdT:null,holdBag:0,holdCells:null,grindT:null,grindBag:0,grindCells:null,grindX:0,grindY:0,traveling:false};
 function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathKey='';AI.extPath=[];AI.extKey='';AI.rc=null;AI.planT=0;AI.holdT=null;AI.holdBag=0;AI.holdCells=null;AI.grindT=null;AI.grindX=dv.x;AI.grindY=dv.y;AI.lastX=dv.x;AI.lastY=dv.y}
 function aiNearSolid(x,y){return solidAt(x,y)||wreckSolid(x,y)}
 
@@ -1366,7 +1367,7 @@ function aiThreatList(){
   if(VXT&&VX.stun<=0)push(VX.x,VX.y,VXR,1.5);
   if(KT){const pts=KT.p;for(let i=3;i<pts.length;i+=2)push(pts[i].x,pts[i].y,42,1)}
   if(KT&&KT.st==='warn')for(const c of CRACKS)push(c.x,c.y,70,.7);
-  if(ANG.on&&!ANG.dead){const[lx,ly]=angLure();push(lx,ly,66,.9);const[mx,my]=angMouth();if(ANG.st==='tell'||ANG.st==='lunge')push(mx,my,125,1.4);if(ANG.stun<=0)push(ANG.x,ANG.y,220,.5)}
+  if(ANG.on&&!ANG.dead){const[lx,ly]=angLure();push(lx,ly,66,.9);const[mx,my]=angMouth();if(ANG.st==='tell'||ANG.st==='lunge')push(mx,my,125,1.4,ANG.vx,ANG.vy);if(ANG.stun<=0)push(ANG.x,ANG.y,220,.5)}
   return L;
 }
 // 威脅排斥向量＋等級（0~1）；投射物/游速取 0.45 秒後預測位置
@@ -1515,9 +1516,11 @@ function aiPickTarget(){
   if(!AI.rc||AI.rc.t!==time)AI.rc={t:time,map:{}};
   const bp=aiBoatPos(),airSec=aiAirSec(),retSec=aiReturnSec();
   let best=null,bs=-1;
+  const needMap=LVD().piece&&!META.maps[LVD().next];
   for(const c of cands){
     const key=Math.round(c.x)+','+Math.round(c.y);
     if(AI.black[key]&&AI.black[key]>time)continue;
+    if(c.kind==='heavy'&&bag>=140)continue;
     let reach=AI.rc.map[key];
     if(reach===undefined){reach=aiReachable(c.x,c.y)?1:0;AI.rc.map[key]=reach}
     if(!reach){AI.black[key]=time+8;continue}
@@ -1529,7 +1532,9 @@ function aiPickTarget(){
     if(oxy<.25){AI.black[key]=time+8;continue}
     const rw=clearLine(dv.x,dv.y,c.x,c.y)?1:.7;
     const threat=aiThreatAt(c.x,c.y);
-    const s=c.val/(d/130+1)*rw*(1-threat*.55)*oxy;
+    let val=c.val;
+    if(c.kind==='map'&&needMap)val*=1.5;   // 解鎖必需的地圖碎片優先
+    const s=val/(d/130+1)*rw*(1-threat*.55)*oxy;
     if(s>bs){bs=s;best=c}
   }
   return best;
@@ -1631,10 +1636,30 @@ function aiEscapeAngle(base){
   }
   return best;
 }
+// Boss 主動戰術：暈眩貼身輸出、將脫暈預拉開；未暈眩維持環帶、tell 側閃、避開誘餌
+function aiBossTarget(){
+  if(!ANG.on||ANG.dead||!ANG.body||ANG.hold||ANG.rl)return null;
+  const dAng=Math.hypot(ANG.x-dv.x,ANG.y-dv.y)||1;
+  if(!inArena(dv.x,dv.y)&&dAng>420)return null;
+  if(ANG.stun>0){
+    if(ANG.stun<.9)return{x:dv.x+(dv.x-ANG.x)/dAng*180,y:dv.y+(dv.y-ANG.y)/dAng*180};
+    if(dAng>64)return{x:ANG.x,y:ANG.y};
+    return{x:dv.x,y:dv.y};
+  }
+  if(ANG.st==='tell'){
+    const a=Math.atan2(dv.y-ANG.y,dv.x-ANG.x),px=Math.cos(a+Math.PI/2),py=Math.sin(a+Math.PI/2);
+    return{x:dv.x+px*100,y:dv.y+py*100};
+  }
+  if(dAng<170)return{x:dv.x+(dv.x-ANG.x)/dAng*200,y:dv.y+(dv.y-ANG.y)/dAng*200};
+  if(dAng>260)return{x:ANG.x,y:ANG.y};
+  const[lx,ly]=angLure();
+  if(Math.hypot(lx-dv.x,ly-dv.y)<90){const a=Math.atan2(dv.y-ly,dv.x-lx);return{x:dv.x+Math.cos(a)*90,y:dv.y+Math.sin(a)*90}}
+  return{x:ANG.x,y:ANG.y};
+}
 function aiThink(){
   if(G.o||ANG.hold||ANG.rl){
     keys.l=keys.r=keys.u=keys.d=false;AI.heading=null;
-    AI.dashPulse-=1/30;if(AI.dashPulse<=0){keys.dash=true;AI.dashPulse=.22}else keys.dash=false;
+    AI.dashPulse-=1/30;if(AI.dashPulse<=0){keys.dash=true;AI.dashPulse=.16}else keys.dash=false;
     return;
   }
   // 氧氣預算分層：必返程 > 補氣孔 > 撈金
@@ -1643,9 +1668,10 @@ function aiThink(){
   const quotaMet=!LVD().free&&bank+bag>=LVD().quota;
   const mustReturn=airSec<=retSec*1.1||carryReturn||goalMet()||quotaMet||bag>=150||!!dv.carry||dv.air<.25;
   const ventFirst=!mustReturn&&bag===0&&airSec<retSec*2.0;
+  const boss=aiBossTarget();
   let tgt=null;
-  if(ANG.on&&!ANG.dead&&ANG.stun>0&&ANG.body)tgt={x:ANG.x,y:ANG.y};
-  else if(mustReturn)tgt=aiReturnTarget();
+  if(mustReturn)tgt=aiReturnTarget();
+  else if(boss)tgt=boss;
   else if(ventFirst){const v=aiAirTarget();tgt=v||aiReturnTarget()}
   else{
     const dropTarget=(reason)=>{if(AI.target)AI.black[Math.round(AI.target.x)+','+Math.round(AI.target.y)]=time+8;AI.target=null;AI.path=[];AI.extPath=[];AI.blockT=0;AI.holdT=null};
@@ -1673,7 +1699,7 @@ function aiThink(){
   if(AI.escapeT>0){
     AI.escapeT-=1/30;
     const hx=Math.cos(AI.escapeA),hy=Math.sin(AI.escapeA);
-    keys.l=hx<-.25;keys.r=hx>.25;keys.u=hy<-.25;keys.d=hy>.25;keys.dash=true;
+    keys.l=hx<-.25;keys.r=hx>.25;keys.u=hy<-.25;keys.d=hy>.25;keys.dash=!dv.carry;
   }else if(tgt)aiSteerTo(tgt.x,tgt.y);
   // 卡住偵測：鋸木/咬住中的刻意靜止不計；但若原地磨太久且袋內/血量無進度，照樣判定卡住
   const chopping=dv.gripOn||!!dv.jawPt;
@@ -1711,23 +1737,26 @@ function aiThink(){
   if(!AI.boardOpened&&atSurf&&bag===0&&!dv.carry&&!G.o&&Math.abs(dv.x-BOATX)<220&&(canBuy()||canLeave())){AI.boardOpened=true;showBoard()}
 }
 function aiBuyUpgrades(){
-  const order=['air','fins','bar','lamp','helm'];
+  // 黑暗關（abyss/deep）先補燈，其餘關先提速與擊殺；氧氣永遠第一
+  const order=(LVD().gs||0)>=4?['air','lamp','fins','bar','helm']:['air','fins','bar','lamp','helm'];
   for(const k of order){const u=UPGRADES.find(q=>q.k===k),l=UP(k),c=u.cost[l];if(c&&META.gold>=c){META.gold-=c;META.up[k]=l+1;saveMeta();sfx.chime();ev('upgrade',k,'level-'+(l+1));return true}}
   return false;
 }
 function aiNextLevel(){
   const nxt=LVD().next;
   if(nxt&&isOpen(nxt)&&(META.best[nxt]||0)<LEVELS[nxt].quota)return nxt;
+  if(!LVD().free&&(META.best[LV]||0)<LVD().quota)return LV;
   let bestId=LV,bestRatio=-1;
   for(const id of LEVELS_IDS){if(!isOpen(id))continue;const q=LEVELS[id].quota||1;const r=(META.best[id]||0)/q;if(r<1&&r>bestRatio){bestRatio=r;bestId=id}}
   return bestId;
 }
 function aiMenuTick(){
+  if(AI.traveling)return;
   AI.menuT-=1/30;if(AI.menuT>0)return;AI.menuT=.5;
   if(aiBuyUpgrades()){showBoard();return}
   const go=aiNextLevel();
-  endDive();META.cur=go;saveMeta();hideUI();ev('travel',go,'sail');
-  adBreak(()=>{loadLevel(go);state='play';pk('gameplayStart');msg(LVD().start,4);sfx.splash()});
+  endDive();META.cur=go;saveMeta();hideUI();ev('travel',go,'sail');AI.traveling=true;
+  adBreak(()=>{AI.traveling=false;loadLevel(go);state='play';pk('gameplayStart');msg(LVD().start,4);sfx.splash()});
 }
 
 const biteR=()=>16,swallowN=()=>14,REACH=80;
