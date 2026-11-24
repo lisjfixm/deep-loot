@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.40.0</title>
+<title>Deep Loot v1.41.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.40.0';
+const VERSION='1.41.0';
 // Changelog
+// 1.41.0: 補氣決策微調——直線不可達的氣孔/空氣口袋進一步降權，AI 補氣時優先選擇直線可達的呼吸點，減少朝繞不過去的氣孔空游
 // 1.40.0: 目標決策評分深化——候選寶藏除目的地威脅外，對直線中段 50%/75% 處取樣威脅，目的地安全但途中高危的目標適度降權；氧氣可行性不足的黑名單時長對齊縮短為 4 秒
 // 1.39.0: 跨關狀態與目標鎖定穩健——載入新關時重置殘留的握持/掙脫/無敵/減速等戰鬥與控制狀態，避免上一關狀態帶入開局；不可達候選的黑名單時長由 8 秒縮短至 4 秒，避免大範圍區域長時間被鎖死、AI 沿岸空轉
 // 1.38.0: 交戰走位與決策細化——逃離方向保留垂直側閃分量，伸抓觸手/追蹤彈不再只會直線後退；睡眠章魚未醒前不列入威脅，避免遠遠繞開；升級順序情境化，高危關（章魚守衛/克拉肯/鮟鱇）提前頭盔縮短掙脫；水母投射物補生命週期存活檢查，消失後不留殘留威脅
@@ -1578,8 +1579,8 @@ function aiWaypoint(x,y){
 }
 function aiAirTarget(){
   const cands=[];
-  for(const v of VENTS){const y=v.y||floorAt(v.x);const ax=v.x,ay=y-40;if(solidAt(ax,ay)||wreckSolid(ax,ay))continue;cands.push({x:ax,y:ay,air:1,reach:clearLine(dv.x,dv.y,ax,ay)?1:.6})}
-  if(typeof LAGP!=='undefined')for(const pk of LAGP){if(pk.air<=0)continue;if(solidAt(pk.x,pk.y)||wreckSolid(pk.x,pk.y))continue;cands.push({x:pk.x,y:pk.y,air:pk.air,reach:clearLine(dv.x,dv.y,pk.x,pk.y)?1:.6})}
+  for(const v of VENTS){const y=v.y||floorAt(v.x);const ax=v.x,ay=y-40;if(solidAt(ax,ay)||wreckSolid(ax,ay))continue;cands.push({x:ax,y:ay,air:1,reach:clearLine(dv.x,dv.y,ax,ay)?1:.35})}
+  if(typeof LAGP!=='undefined')for(const pk of LAGP){if(pk.air<=0)continue;if(solidAt(pk.x,pk.y)||wreckSolid(pk.x,pk.y))continue;cands.push({x:pk.x,y:pk.y,air:pk.air,reach:clearLine(dv.x,dv.y,pk.x,pk.y)?1:.35})}
   let best=null,bs=-1;
   for(const c of cands){const d=Math.hypot(c.x-dv.x,c.y-dv.y)||1;const s=(c.air*.6+.6)/(d/160+1)*c.reach;if(s>bs){bs=s;best=c}}
   return best;
