@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.39.0</title>
+<title>Deep Loot v1.40.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.39.0';
+const VERSION='1.40.0';
 // Changelog
+// 1.40.0: 目標決策評分深化——候選寶藏除目的地威脅外，對直線中段 50%/75% 處取樣威脅，目的地安全但途中高危的目標適度降權；氧氣可行性不足的黑名單時長對齊縮短為 4 秒
 // 1.39.0: 跨關狀態與目標鎖定穩健——載入新關時重置殘留的握持/掙脫/無敵/減速等戰鬥與控制狀態，避免上一關狀態帶入開局；不可達候選的黑名單時長由 8 秒縮短至 4 秒，避免大範圍區域長時間被鎖死、AI 沿岸空轉
 // 1.38.0: 交戰走位與決策細化——逃離方向保留垂直側閃分量，伸抓觸手/追蹤彈不再只會直線後退；睡眠章魚未醒前不列入威脅，避免遠遠繞開；升級順序情境化，高危關（章魚守衛/克拉肯/鮟鱇）提前頭盔縮短掙脫；水母投射物補生命週期存活檢查，消失後不留殘留威脅
 // 1.37.0: 求生決策護欄——外部返程估時加入岩架繞路保守係數，氧氣預算不再偏樂觀；Boss 戰鬥前檢查氧氣是否足夠安全撤離，不足時不主動接戰、先返程求生
@@ -1542,13 +1543,16 @@ function aiPickTarget(){
     const drag=c.kind==='heavy'?1.25:1;
     const rt=(d/aiCruise()+1.5+retSec)*drag;
     const oxy=Math.min(1,airSec*.85/Math.max(rt,1));
-    if(oxy<.25){AI.black[key]=time+8;continue}
+    if(oxy<.25){AI.black[key]=time+4;continue}
     const rw=clearLine(dv.x,dv.y,c.x,c.y)?1:.7;
     const threat=aiThreatAt(c.x,c.y);
+    // 路徑中段取樣威脅：目的地安全但中途高危的目標降權
+    const mx=dv.x+(c.x-dv.x)*.5,my=dv.y+(c.y-dv.y)*.5;
+    const midThreat=Math.max(aiThreatAt(mx,my),aiThreatAt(dv.x+(c.x-dv.x)*.75,dv.y+(c.y-dv.y)*.75));
     let val=c.val;
     if(c.kind==='map'&&needMap)val*=1.5;   // 解鎖必需的地圖碎片優先
     const closeK=val<20?(d/70+1):(d/130+1);   // 低價值碎片只在近身時優先，不與高價值遠距競爭
-    const s=val/closeK*rw*(1-threat*.55)*oxy;
+    const s=val/closeK*rw*(1-threat*.55)*(1-midThreat*.3)*oxy;
     if(s>bs){bs=s;best=c}
   }
   return best;
