@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.41.0</title>
+<title>Deep Loot v1.42.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.41.0';
+const VERSION='1.42.0';
 // Changelog
+// 1.42.0: 威脅半徑對照修正——水雷爆炸衝擊圈達 115px，原威脅半徑僅 40 偏小，提升至 95px 預警距離，AI 不會貼到水雷旁才開始閃避
 // 1.41.0: 補氣決策微調——直線不可達的氣孔/空氣口袋進一步降權，AI 補氣時優先選擇直線可達的呼吸點，減少朝繞不過去的氣孔空游
 // 1.40.0: 目標決策評分深化——候選寶藏除目的地威脅外，對直線中段 50%/75% 處取樣威脅，目的地安全但途中高危的目標適度降權；氧氣可行性不足的黑名單時長對齊縮短為 4 秒
 // 1.39.0: 跨關狀態與目標鎖定穩健——載入新關時重置殘留的握持/掙脫/無敵/減速等戰鬥與控制狀態，避免上一關狀態帶入開局；不可達候選的黑名單時長由 8 秒縮短至 4 秒，避免大範圍區域長時間被鎖死、AI 沿岸空轉
@@ -1369,7 +1370,7 @@ function aiThreatList(){
   }
   for(const c of CRABS)push(c.x,groundY(c.x),52,.35);
   for(const b of bodies){if(b.crab&&!b.dead&&b.cells>0)push(b.x,b.y,42,.5)}
-  for(const m of MINES)if(m.live)push(m.x,m.y,40,1);
+  for(const m of MINES)if(m.live)push(m.x,m.y,95,1);
   for(const f of PUFFS)if(f.inf>.55)push(f.x,f.y,95,.8,f.vx||0,f.vy||0);
   for(const j of HZJ){const ready=j.cd<=1&&Math.hypot(dv.x-j.x,dv.y-j.y)<170;push(j.x,j.y,ready?120:28,ready?.8:.3)}
   for(const z of ZAPS)if((z.l??1)>0)push(z.x,z.y,34,1.2,z.vx||0,z.vy||0);
