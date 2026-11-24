@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.37.0</title>
+<title>Deep Loot v1.38.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.37.0';
+const VERSION='1.38.0';
 // Changelog
+// 1.38.0: 交戰走位與決策細化——逃離方向保留垂直側閃分量，伸抓觸手/追蹤彈不再只會直線後退；睡眠章魚未醒前不列入威脅，避免遠遠繞開；升級順序情境化，高危關（章魚守衛/克拉肯/鮟鱇）提前頭盔縮短掙脫；水母投射物補生命週期存活檢查，消失後不留殘留威脅
 // 1.37.0: 求生決策護欄——外部返程估時加入岩架繞路保守係數，氧氣預算不再偏樂觀；Boss 戰鬥前檢查氧氣是否足夠安全撤離，不足時不主動接戰、先返程求生
 // 1.36.0: 決策與穩健細化——補氣目標依空氣量/直線可達性加權並排除落地固體點；水母威脅蓄電將放電時才拉高半徑與強度，未蓄電僅算接觸範圍；低價值碎片只在近身時優先，不與高價值遠距目標競爭；物理層加 NaN 守衛，座標/速度異常時重置回船邊
 // 1.35.0: 外部導航修補——外部水域 A* 開放判定納入船骸殼，避免路徑貝殼/穿殼卡住；起點被堵時收斂到最近開放格，搜尋上限提高；無繞路結果時先測正上方，被堵則往最開闊側邊平移，不直頂船殼岩架；修復已被吸走的貝殼/散幣殘留為目標（存活檢查回到對應陣列）
@@ -1358,8 +1359,8 @@ function aiThreatList(){
   if(AI.threatT===time&&AI.threatL)return AI.threatL;
   const L=[];const push=(x,y,r,w,vx=0,vy=0)=>{if(isFinite(x)&&isFinite(y))L.push({x,y,r,w,vx,vy})};
   for(const o of OCTOS){
-    if(!o.alive||o.dead||o.stun>0||o.passive||o.calm)continue;
-    const R=(o.sleep?o.zone*.6:o.zone*.9)+(o.seg||0)*2;
+    if(!o.alive||o.dead||o.stun>0||o.passive||o.calm||o.sleep)continue;
+    const R=o.zone*.9+(o.seg||0)*2;
     push(o.x,o.y,R,1.3);
     for(const t of(o.tents||[])){const a=t.st==='reach'||t.st==='hold'?1.5:.7;push(t.tx,t.ty,34,a)}
   }
@@ -1368,7 +1369,7 @@ function aiThreatList(){
   for(const m of MINES)if(m.live)push(m.x,m.y,40,1);
   for(const f of PUFFS)if(f.inf>.55)push(f.x,f.y,95,.8,f.vx||0,f.vy||0);
   for(const j of HZJ){const ready=j.cd<=1&&Math.hypot(dv.x-j.x,dv.y-j.y)<170;push(j.x,j.y,ready?120:28,ready?.8:.3)}
-  for(const z of ZAPS)push(z.x,z.y,34,1.2,z.vx||0,z.vy||0);
+  for(const z of ZAPS)if((z.l??1)>0)push(z.x,z.y,34,1.2,z.vx||0,z.vy||0);
   for(const g of GEYS){if(g.sz==='s'||g.st==='idle')continue;push(g.x,g.y,g.sz==='b'?95:65,.9)}
   if(VXT&&VX.stun<=0)push(VX.x,VX.y,VXR,1.5);
   if(KT){const pts=KT.p,n=pts.length;for(let i=3;i<n;i+=2)push(pts[i].x,pts[i].y,42,i>=n-4?1.3:1)}
@@ -1614,7 +1615,8 @@ function aiFleeDir(D,base){
   for(let k=0;k<8;k++){
     const a=base-Math.PI+k*Math.PI/4,cx=Math.cos(a),cy=Math.sin(a);
     if(!aiOpenAt(cx,cy,26))continue;
-    let s=(cx*D.x+cy*D.y)*1.6+(aiOpenAt(cx,cy,46)?.8:0)+Math.cos(a-base)*.2;
+    const side=Math.abs(cx*D.y-cy*D.x);  // 與排斥向量的垂直分量：側閃適用於伸抓觸手/追蹤彈
+    let s=(cx*D.x+cy*D.y)*1.6+(aiOpenAt(cx,cy,46)?.8:0)+Math.cos(a-base)*.2+side*.35;
     if(cy<0)s+=.1;
     if(s>bs){bs=s;best=a}
   }
@@ -1762,8 +1764,10 @@ function aiThink(){
   if(!AI.boardOpened&&atSurf&&bag===0&&!dv.carry&&!G.o&&Math.abs(dv.x-BOATX)<220&&(canBuy()||canLeave())){AI.boardOpened=true;showBoard()}
 }
 function aiBuyUpgrades(){
-  // 黑暗關（abyss/deep）先補燈，其餘關先提速與擊殺；氧氣永遠第一
-  const order=(LVD().gs||0)>=4?['air','lamp','fins','bar','helm']:['air','fins','bar','lamp','helm'];
+  // 氧氣永遠第一；黑暗關（abyss/deep）先補燈；高危關（章魚守衛/克拉肯/鮟鱇）易被抓，頭盔提前縮短掙脫
+  const dark=(LVD().gs||0)>=4,hot=['galleon','abyss','deep'].includes(LV);
+  const order=dark?(hot?['air','lamp','fins','helm','bar']:['air','lamp','fins','bar','helm'])
+    :hot?['air','fins','helm','bar','lamp']:['air','fins','bar','lamp','helm'];
   for(const k of order){const u=UPGRADES.find(q=>q.k===k),l=UP(k),c=u.cost[l];if(c&&META.gold>=c){META.gold-=c;META.up[k]=l+1;saveMeta();sfx.chime();ev('upgrade',k,'level-'+(l+1));return true}}
   return false;
 }
