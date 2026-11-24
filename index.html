@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.42.0</title>
+<title>Deep Loot v1.43.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.42.0';
+const VERSION='1.43.0';
 // Changelog
+// 1.43.0: 觸手威脅分層——伸抓/握持中的觸手提高預警半徑至 48px，閒置/收回觸手維持 30px，AI 對正在抓來的觸手更早側閃
 // 1.42.0: 威脅半徑對照修正——水雷爆炸衝擊圈達 115px，原威脅半徑僅 40 偏小，提升至 95px 預警距離，AI 不會貼到水雷旁才開始閃避
 // 1.41.0: 補氣決策微調——直線不可達的氣孔/空氣口袋進一步降權，AI 補氣時優先選擇直線可達的呼吸點，減少朝繞不過去的氣孔空游
 // 1.40.0: 目標決策評分深化——候選寶藏除目的地威脅外，對直線中段 50%/75% 處取樣威脅，目的地安全但途中高危的目標適度降權；氧氣可行性不足的黑名單時長對齊縮短為 4 秒
@@ -1366,7 +1367,7 @@ function aiThreatList(){
     if(!o.alive||o.dead||o.stun>0||o.passive||o.calm||o.sleep)continue;
     const R=o.zone*.9+(o.seg||0)*2;
     push(o.x,o.y,R,1.3);
-    for(const t of(o.tents||[])){const a=t.st==='reach'||t.st==='hold'?1.5:.7;push(t.tx,t.ty,34,a)}
+    for(const t of(o.tents||[])){const a=t.st==='reach'||t.st==='hold'?1.5:.7;push(t.tx,t.ty,t.st==='reach'||t.st==='hold'?48:30,a)}
   }
   for(const c of CRABS)push(c.x,groundY(c.x),52,.35);
   for(const b of bodies){if(b.crab&&!b.dead&&b.cells>0)push(b.x,b.y,42,.5)}
