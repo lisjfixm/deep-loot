@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.38.0</title>
+<title>Deep Loot v1.39.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.38.0';
+const VERSION='1.39.0';
 // Changelog
+// 1.39.0: 跨關狀態與目標鎖定穩健——載入新關時重置殘留的握持/掙脫/無敵/減速等戰鬥與控制狀態，避免上一關狀態帶入開局；不可達候選的黑名單時長由 8 秒縮短至 4 秒，避免大範圍區域長時間被鎖死、AI 沿岸空轉
 // 1.38.0: 交戰走位與決策細化——逃離方向保留垂直側閃分量，伸抓觸手/追蹤彈不再只會直線後退；睡眠章魚未醒前不列入威脅，避免遠遠繞開；升級順序情境化，高危關（章魚守衛/克拉肯/鮟鱇）提前頭盔縮短掙脫；水母投射物補生命週期存活檢查，消失後不留殘留威脅
 // 1.37.0: 求生決策護欄——外部返程估時加入岩架繞路保守係數，氧氣預算不再偏樂觀；Boss 戰鬥前檢查氧氣是否足夠安全撤離，不足時不主動接戰、先返程求生
 // 1.36.0: 決策與穩健細化——補氣目標依空氣量/直線可達性加權並排除落地固體點；水母威脅蓄電將放電時才拉高半徑與強度，未蓄電僅算接觸範圍；低價值碎片只在近身時優先，不與高價值遠距目標競爭；物理層加 NaN 守衛，座標/速度異常時重置回船邊
@@ -1535,7 +1536,7 @@ function aiPickTarget(){
     if(c.kind==='heavy'&&bag>=140)continue;
     let reach=AI.rc.map[key];
     if(reach===undefined){reach=aiReachable(c.x,c.y)?1:0;AI.rc.map[key]=reach}
-    if(!reach){AI.black[key]=time+8;continue}
+    if(!reach){AI.black[key]=time+4;continue}
     const d=Math.hypot(c.x-dv.x,c.y-dv.y)||1;
     // 氧氣可行性：去程＋返程（走廊模型）vs 剩餘氧氣，不夠就跳過並列入黑名單；重物返程拖慢
     const drag=c.kind==='heavy'?1.25:1;
@@ -3494,7 +3495,7 @@ function loadLevel(id){
   T.fill(0);V.fill(0);Hp.fill(0);GC.fill(0);TOTAL=0;bag=0;bank=0;LOST=0;HB=0;cleanTold=false;bonusTold=false;MAPP=null;
   G.o=null;G.t=null;visited=false;entered=false;goalTold=false;roamT=4;toldRoam=false;for(const v of VENTS)v.y=0;
   GEYS.length=0;CRACKS.length=0;GLOW.length=0;DEN=null;VXT=null;toldVx=false;VX.stun=0;VX.cd=0;{const vx=LV==='abyss'?[820,5080]:[1250,4300];VENTS.forEach((v,i)=>{v.x=vx[i];v.y=0})}KT=null;krT=7;toldKr=false;toldGey=false;TOLDG={};KEYE=null;CROWN=null;KR.maw=KR.mawT=KR.stun=0;
-  Object.assign(dv,{x:BOATX+50,y:SURF+8,vx:0,vy:0,ang:0,pitch:0,face:1,fx:1,air:1,st:1,inv:0,eaten:false,lost:0,gO:null,spin:0,carry:null,carryCd:0,trail:[],jawPt:null,tool:0,toldCarry:false,dashT:0});
+  Object.assign(dv,{x:BOATX+50,y:SURF+8,vx:0,vy:0,ang:0,pitch:0,face:1,fx:1,air:1,st:1,inv:0,eaten:false,lost:0,gO:null,spin:0,carry:null,carryCd:0,trail:[],jawPt:null,tool:0,toldCarry:false,dashT:0,gripOn:false,gripT:0,squeeze:false,slowT:0,stun:0,head:null,kick:0,hadTool:false,drawT:0});
   ANG.on=false;ANG.box=null;build();buildNav();if(LV==='galleon')glowPath();angReset();aiReset();
 }
 // светящиеся водоросли в галеоне: от каждого входа к обрывку карты (или к трюму)
