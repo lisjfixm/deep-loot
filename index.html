@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.43.0</title>
+<title>Deep Loot v1.44.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.43.0';
+const VERSION='1.44.0';
 // Changelog
+// 1.44.0: AI 狀態重置加固——換關/重開時補齊遺漏的狀態欄位清空，特別是 traveling 旗標殘留可能卡住選關流程；其餘脫困方向、掙脫脈衝、路徑時間戳等一併對齊
 // 1.43.0: 觸手威脅分層——伸抓/握持中的觸手提高預警半徑至 48px，閒置/收回觸手維持 30px，AI 對正在抓來的觸手更早側閃
 // 1.42.0: 威脅半徑對照修正——水雷爆炸衝擊圈達 115px，原威脅半徑僅 40 偏小，提升至 95px 預警距離，AI 不會貼到水雷旁才開始閃避
 // 1.41.0: 補氣決策微調——直線不可達的氣孔/空氣口袋進一步降權，AI 補氣時優先選擇直線可達的呼吸點，減少朝繞不過去的氣孔空游
@@ -1339,7 +1340,7 @@ const ptr={sx:600,sy:300,wx:600,wy:300,down:false};
 const keys={l:false,r:false,u:false,d:false,dash:false};
 // ================= 全自動 AI（全資料感知：寶藏/怪物/威脅/補氣孔/網格路徑 + 脫困狀態機） =================
 const AI={on:false,target:null,stuckT:0,lastX:0,lastY:0,escapeT:0,escapeA:0,escapeN:0,escapeSide:1,blockT:0,dashPulse:0,menuT:0,black:{},heading:null,boardOpened:false,path:[],pathT:0,pathKey:'',extPath:[],extKey:'',extT:0,rc:null,planT:0,holdT:null,holdBag:0,holdCells:null,grindT:null,grindBag:0,grindCells:null,grindX:0,grindY:0,traveling:false,threatT:0,threatL:null,returning:false};
-function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeN=0;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathKey='';AI.extPath=[];AI.extKey='';AI.rc=null;AI.planT=0;AI.holdT=null;AI.holdBag=0;AI.holdCells=null;AI.grindT=null;AI.grindX=dv.x;AI.grindY=dv.y;AI.lastX=dv.x;AI.lastY=dv.y;AI.threatT=0;AI.threatL=null;AI.returning=false}
+function aiReset(){AI.target=null;AI.stuckT=0;AI.blockT=0;AI.escapeT=0;AI.escapeA=0;AI.escapeN=0;AI.escapeSide=1;AI.heading=null;AI.boardOpened=false;AI.black={};AI.path=[];AI.pathT=0;AI.pathKey='';AI.extPath=[];AI.extKey='';AI.extT=0;AI.rc=null;AI.planT=0;AI.holdT=null;AI.holdBag=0;AI.holdCells=null;AI.grindT=null;AI.grindBag=0;AI.grindCells=null;AI.grindX=dv.x;AI.grindY=dv.y;AI.lastX=dv.x;AI.lastY=dv.y;AI.threatT=0;AI.threatL=null;AI.returning=false;AI.traveling=false;AI.dashPulse=0;AI.menuT=0}
 function aiNearSolid(x,y){return solidAt(x,y)||wreckSolid(x,y)}
 
 // ---- 氧氣預算 ----
