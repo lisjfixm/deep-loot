@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.35.0</title>
+<title>Deep Loot v1.36.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.35.0';
+const VERSION='1.36.0';
 // Changelog
+// 1.36.0: 決策與穩健細化——補氣目標依空氣量/直線可達性加權並排除落地固體點；水母威脅蓄電將放電時才拉高半徑與強度，未蓄電僅算接觸範圍；低價值碎片只在近身時優先，不與高價值遠距目標競爭；物理層加 NaN 守衛，座標/速度異常時重置回船邊
 // 1.35.0: 外部導航修補——外部水域 A* 開放判定納入船骸殼，避免路徑貝殼/穿殼卡住；起點被堵時收斂到最近開放格，搜尋上限提高；無繞路結果時先測正上方，被堵則往最開闊側邊平移，不直頂船殼岩架；修復已被吸走的貝殼/散幣殘留為目標（存活檢查回到對應陣列）
 // 1.34.0: AI 威脅與返程強化——威脅清單本幀快取避免候選目標重複全量掃描；預測視窗依威脅速度自適應（高速投射物預測更遠、慢速生物不預測）；克拉肯觸手末端加權為更高威脅；返程非攜帶且安全時衝刺門檻降低以加快脫離；Boss 關未擊殺時主動進場引戰，金額夠但 Boss 未死前不誤判返程，避免卡在船邊
 // 1.33.0: Boss 主動戰術——暈眩貼身輸出、將脫暈預先拉開，未暈眩維持環帶距離、tell 階段垂直側閃、避開誘餌光點，lunge 帶速度預測；目標評分袋滿排除重物、解鎖必需地圖加權，攜重物直線返程；動態升級（黑暗關先補燈）；選關優先續攻當前主線關；選關旅行重入守衛，脫困衝刺不再掉重物，掙脫連打加快
@@ -1364,7 +1365,7 @@ function aiThreatList(){
   for(const b of bodies){if(b.crab&&!b.dead&&b.cells>0)push(b.x,b.y,42,.5)}
   for(const m of MINES)if(m.live)push(m.x,m.y,40,1);
   for(const f of PUFFS)if(f.inf>.55)push(f.x,f.y,95,.8,f.vx||0,f.vy||0);
-  for(const j of HZJ)push(j.x,j.y,130,.7);
+  for(const j of HZJ){const ready=j.cd<=1&&Math.hypot(dv.x-j.x,dv.y-j.y)<170;push(j.x,j.y,ready?120:28,ready?.8:.3)}
   for(const z of ZAPS)push(z.x,z.y,34,1.2,z.vx||0,z.vy||0);
   for(const g of GEYS){if(g.sz==='s'||g.st==='idle')continue;push(g.x,g.y,g.sz==='b'?95:65,.9)}
   if(VXT&&VX.stun<=0)push(VX.x,VX.y,VXR,1.5);
@@ -1542,7 +1543,8 @@ function aiPickTarget(){
     const threat=aiThreatAt(c.x,c.y);
     let val=c.val;
     if(c.kind==='map'&&needMap)val*=1.5;   // 解鎖必需的地圖碎片優先
-    const s=val/(d/130+1)*rw*(1-threat*.55)*oxy;
+    const closeK=val<20?(d/70+1):(d/130+1);   // 低價值碎片只在近身時優先，不與高價值遠距競爭
+    const s=val/closeK*rw*(1-threat*.55)*oxy;
     if(s>bs){bs=s;best=c}
   }
   return best;
@@ -1567,9 +1569,11 @@ function aiWaypoint(x,y){
   return[dv.x+Math.cos(fa)*70,dv.y+Math.sin(fa)*70];
 }
 function aiAirTarget(){
-  let best=null,bd=280;
-  for(const v of VENTS){const y=v.y||floorAt(v.x);const d=Math.hypot(v.x-dv.x,y-dv.y);if(d<bd){bd=d;best={x:v.x,y:y-40}}}
-  if(typeof LAGP!=='undefined')for(const pk of LAGP){if(pk.air<=0)continue;const d=Math.hypot(pk.x-dv.x,pk.y-dv.y);if(d<bd){bd=d;best={x:pk.x,y:pk.y}}}
+  const cands=[];
+  for(const v of VENTS){const y=v.y||floorAt(v.x);const ax=v.x,ay=y-40;if(solidAt(ax,ay)||wreckSolid(ax,ay))continue;cands.push({x:ax,y:ay,air:1,reach:clearLine(dv.x,dv.y,ax,ay)?1:.6})}
+  if(typeof LAGP!=='undefined')for(const pk of LAGP){if(pk.air<=0)continue;if(solidAt(pk.x,pk.y)||wreckSolid(pk.x,pk.y))continue;cands.push({x:pk.x,y:pk.y,air:pk.air,reach:clearLine(dv.x,dv.y,pk.x,pk.y)?1:.6})}
+  let best=null,bs=-1;
+  for(const c of cands){const d=Math.hypot(c.x-dv.x,c.y-dv.y)||1;const s=(c.air*.6+.6)/(d/160+1)*c.reach;if(s>bs){bs=s;best=c}}
   return best;
 }
 function aiReturnTarget(){
@@ -1930,6 +1934,7 @@ function terrMove(dx,dy){if(dx){const ox=dv.x,oy=dv.y,m=Math.abs(dx);dv.x+=dx;if
 // если песок осыпался на дайвера или он повернулся в стену — плавно сдвигаем к воде, скорость не трогаем
 function terrFree(dt){let p=terrHit();if(!p){dv.stuckT=0;return}dv.stuckT=(dv.stuckT||0)+dt;let left=(dv.stuckT>.5?320:110)*dt;while(p&&left>0){let nx=0,ny=0;for(const r of[6,12,22]){for(const[c,sn]of DIR8)if(!solidAt(p.x+c*r,p.y+sn*r)){nx+=c;ny+=sn}if(nx||ny)break}const d=Math.hypot(nx,ny);if(d<.01){nx=0;ny=-1}else{nx/=d;ny/=d}const st=Math.min(1.5,left);dv.x+=nx*st;dv.y+=ny*st;left-=st;p=terrHit()}}
 function physics(dt){
+  if(!isFinite(dv.x)||!isFinite(dv.y)||!isFinite(dv.vx)||!isFinite(dv.vy)){dv.x=BOATX;dv.y=SURF+20;dv.vx=0;dv.vy=0}
   const wasWet=dv.y>SURF,vy0=dv.vy,x0=dv.x,y0=dv.y;
   const steps=Math.max(1,Math.ceil(Math.hypot(dv.vx,dv.vy)*dt/4)),nearW=Math.abs(WRECK.x-dv.x)<WRECK.rad+120;
   const stuck=!!terrHit();for(let k=0;k<steps;k++){if(!stuck)terrMove(dv.vx*dt/steps,dv.vy*dt/steps);if(nearW)pushOut()}if(stuck)terrFree(dt);else dv.stuckT=0;
