@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Deep Loot v1.44.0</title>
+<title>Deep Loot v1.45.0</title>
 <script>
 // Offline Poki SDK stub: ads/analytics stripped.
 window.PokiSDK = {
@@ -87,8 +87,9 @@ button:focus-visible,select:focus-visible{outline:2px solid #ffd76a;outline-offs
 <script>
 'use strict';
 // Release version: bump this constant, <title> and any visible version label together.
-const VERSION='1.44.0';
+const VERSION='1.45.0';
 // Changelog
+// 1.45.0: 毒泡威脅距離對照收窄——河豚僅擊飛掉幣、不扣血，實際觸發半徑約 32px，原 95px 警戒過早；調為 62px 半徑、權重 0.6，AI 不為躲避低危險泡泡長期繞開寶藏區
 // 1.44.0: AI 狀態重置加固——換關/重開時補齊遺漏的狀態欄位清空，特別是 traveling 旗標殘留可能卡住選關流程；其餘脫困方向、掙脫脈衝、路徑時間戳等一併對齊
 // 1.43.0: 觸手威脅分層——伸抓/握持中的觸手提高預警半徑至 48px，閒置/收回觸手維持 30px，AI 對正在抓來的觸手更早側閃
 // 1.42.0: 威脅半徑對照修正——水雷爆炸衝擊圈達 115px，原威脅半徑僅 40 偏小，提升至 95px 預警距離，AI 不會貼到水雷旁才開始閃避
@@ -1373,7 +1374,7 @@ function aiThreatList(){
   for(const c of CRABS)push(c.x,groundY(c.x),52,.35);
   for(const b of bodies){if(b.crab&&!b.dead&&b.cells>0)push(b.x,b.y,42,.5)}
   for(const m of MINES)if(m.live)push(m.x,m.y,95,1);
-  for(const f of PUFFS)if(f.inf>.55)push(f.x,f.y,95,.8,f.vx||0,f.vy||0);
+  for(const f of PUFFS)if(f.inf>.55)push(f.x,f.y,62,.6,f.vx||0,f.vy||0);
   for(const j of HZJ){const ready=j.cd<=1&&Math.hypot(dv.x-j.x,dv.y-j.y)<170;push(j.x,j.y,ready?120:28,ready?.8:.3)}
   for(const z of ZAPS)if((z.l??1)>0)push(z.x,z.y,34,1.2,z.vx||0,z.vy||0);
   for(const g of GEYS){if(g.sz==='s'||g.st==='idle')continue;push(g.x,g.y,g.sz==='b'?95:65,.9)}
